@@ -3,6 +3,7 @@ import { CreateRace } from "./components/CreateRace";
 import { DocNote } from "./components/DocNote";
 import { FinalResults } from "./components/FinalResults";
 import { LiveRaceDashboard } from "./components/LiveRaceDashboard";
+import { LoginPage } from "./components/LoginPage";
 import { RaceLobby } from "./components/RaceLobby";
 import { StudentJoin } from "./components/StudentJoin";
 import { StudentRaceScreen } from "./components/StudentRaceScreen";
@@ -240,6 +241,22 @@ function App() {
       });
     }
   };
+
+  const isLoginScreen = (role === "teacher" && !teacherId) || (role === "student" && !studentRoomCode);
+
+  if (isLoginScreen) {
+    return (
+      <main className="auth-app">
+        <LoginPage
+          activeRole={role}
+          onRoleChange={setRole}
+          onTeacherLogin={handleTeacherLogin}
+          onGoogleLogin={handleTeacherGoogleLogin}
+          onStudentJoin={handleStudentJoin}
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="app">
