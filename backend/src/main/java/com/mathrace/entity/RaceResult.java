@@ -41,7 +41,7 @@ public class RaceResult extends BaseEntity {
     @Column(nullable = false)
     private int finalScore;
 
-    @Column(nullable = false, precision = 5, scale = 2)
+    @Column(nullable = false)
     private double accuracyPct;
 
     private Integer avgResponseMs;

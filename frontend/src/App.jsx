@@ -3,7 +3,7 @@ import { CreateRace } from "./components/CreateRace";
 import { DocNote } from "./components/DocNote";
 import { FinalResults } from "./components/FinalResults";
 import { LiveRaceDashboard } from "./components/LiveRaceDashboard";
-import { LoginPage } from "./components/LoginPage";
+import { FloatingNumbersBackground, LoginPage } from "./components/LoginPage";
 import { RaceLobby } from "./components/RaceLobby";
 import { StudentJoin } from "./components/StudentJoin";
 import { StudentRaceScreen } from "./components/StudentRaceScreen";
@@ -259,8 +259,14 @@ function App() {
   }
 
   return (
-    <main className="app">
-      <header className="card row between">
+    <main className="app-shell">
+      <FloatingNumbersBackground />
+      <div className="auth-symbol auth-symbol-one" aria-hidden="true">+</div>
+      <div className="auth-symbol auth-symbol-two" aria-hidden="true">*</div>
+      <div className="auth-symbol auth-symbol-three" aria-hidden="true">=</div>
+
+      <div className="app">
+        <header className="card row between">
         <h1>Math Race</h1>
         <div className="row">
           <button className={role === "teacher" ? "" : "ghost"} onClick={() => setRole("teacher")}>
@@ -270,7 +276,7 @@ function App() {
             תלמיד
           </button>
         </div>
-      </header>
+        </header>
 
       <DocNote
         title="System Documentation"
@@ -339,7 +345,8 @@ function App() {
           ) : null}
           {studentFinalRows ? <FinalResults rows={studentFinalRows} onReset={resetStudentFlow} /> : null}
         </>
-      )}
+        )}
+      </div>
     </main>
   );
 }

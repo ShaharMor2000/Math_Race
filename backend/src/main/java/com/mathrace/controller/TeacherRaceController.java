@@ -51,7 +51,7 @@ public class TeacherRaceController {
     public Map<String, Object> roomDetails(@PathVariable String roomCode) {
         RaceRoom room = raceRoomService.getByRoomCodeOrThrow(roomCode);
         List<RaceParticipant> participants = raceRoomService.getRoomParticipants(roomCode);
-        List<Map<String, Object>> rows = participants.stream().map(p -> Map.of(
+        List<Map<String, Object>> rows = participants.stream().<Map<String, Object>>map(p -> Map.of(
             "participantId", p.getId(),
             "studentId", p.getStudent().getId(),
             "displayName", p.getStudent().getDisplayName(),

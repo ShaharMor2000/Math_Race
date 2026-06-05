@@ -41,7 +41,7 @@ function GoogleIcon() {
   );
 }
 
-function FloatingNumbersBackground() {
+export function FloatingNumbersBackground() {
   const items = [
     ["7", 72, 120, "slow"],
     ["12", 250, 86, "medium"],
