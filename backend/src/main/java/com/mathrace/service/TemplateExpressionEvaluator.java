@@ -1,7 +1,10 @@
 package com.mathrace.service;
 
+import org.springframework.stereotype.Service;
+
 import java.util.Random;
 
+@Service
 public class TemplateExpressionEvaluator {
 
     public record GeneratedQuestionData(String questionText, int answer) {}
