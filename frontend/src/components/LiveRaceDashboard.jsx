@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { EventFeed } from "./EventFeed";
 import { GameEventToast } from "./GameEventToast";
 import { Leaderboard } from "./Leaderboard";
 import { RaceTrack } from "./RaceTrack";
@@ -21,11 +22,13 @@ export function LiveRaceDashboard({
   participants,
   leaderboard,
   eventMessage,
+  eventFeed,
   onEndRace,
   onPauseRace,
   onResumeRace
 }) {
   const [remaining, setRemaining] = useState(formatRemaining(startAt, raceDurationMinutes));
+  const joinLink = `${window.location.origin}/join/${roomCode}`;
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -35,11 +38,12 @@ export function LiveRaceDashboard({
   }, [startAt, raceDurationMinutes]);
 
   return (
-    <section className="stack live-dashboard">
+    <section className="stack live-dashboard projector-mode">
       <div className="card row between projector-header">
         <div>
           <h2>מרוץ חי</h2>
           <p className="room-code-large">קוד חדר: {roomCode}</p>
+          <p className="join-link">לינק להצטרפות: {joinLink}</p>
           <p className="race-status">סטטוס: {roomStatus || "RUNNING"}</p>
           {remaining ? <p className="global-timer">זמן נותר: {remaining}</p> : null}
         </div>
@@ -54,7 +58,13 @@ export function LiveRaceDashboard({
         </div>
       </div>
       <RaceTrack participants={participants} />
-      <Leaderboard rows={leaderboard} />
+      <div className="dashboard-panels">
+        <Leaderboard rows={leaderboard} />
+        <div className="card">
+          <h3>התראות חיות</h3>
+          <EventFeed events={eventFeed} />
+        </div>
+      </div>
       <GameEventToast message={eventMessage} />
     </section>
   );

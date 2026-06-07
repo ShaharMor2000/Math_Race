@@ -1092,6 +1092,73 @@ button.ghost {
   margin-top: 10px;
 }
 
+.projector-mode .room-code-large {
+  font-size: 3rem;
+}
+
+.join-link {
+  font-size: 0.95rem;
+  opacity: 0.85;
+  word-break: break-all;
+}
+
+.dashboard-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.event-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.event-feed.empty {
+  opacity: 0.7;
+  padding: 12px 0;
+}
+
+.event-feed-item {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-inline-start: 3px solid rgba(255, 255, 255, 0.2);
+}
+
+.event-feed-item.type-overtake {
+  border-inline-start-color: #77ff90;
+}
+
+.event-feed-item.type-bonus,
+.event-feed-item.type-turbo,
+.event-feed-item.type-boost {
+  border-inline-start-color: #32d2ff;
+}
+
+.event-feed-item.type-streak {
+  border-inline-start-color: #ffc44d;
+}
+
+.event-feed-item.type-path_choice {
+  border-inline-start-color: #b388ff;
+}
+
+.event-feed-item.type-stalled,
+.event-feed-item.type-malfunction {
+  border-inline-start-color: #ff6b6b;
+}
+
+.event-feed-time {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
 @media (max-width: 768px) {
   .auth-page {
     grid-template-columns: 1fr;

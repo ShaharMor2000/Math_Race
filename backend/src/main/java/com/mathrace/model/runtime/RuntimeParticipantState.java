@@ -18,6 +18,9 @@ public class RuntimeParticipantState {
     private int slowdownQuestionsRemaining = 0;
     private int hintQuestionsRemaining = 0;
     private boolean questionSwapAvailable = false;
+    private int frozenQuestionsRemaining = 0;
+    private int luckMeter = 0;
+    private int negativeLuckStreak = 0;
     private int lastKnownRank = 0;
     private Set<String> activeEffects = new HashSet<>();
 }

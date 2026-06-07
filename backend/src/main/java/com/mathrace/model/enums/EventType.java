@@ -8,6 +8,8 @@ public enum EventType {
     MALFUNCTION,
     SLOWDOWN,
     PATH_DECISION,
+    PATH_CHOICE,
+    STALLED,
     OVERTAKE,
     WINNER
 }

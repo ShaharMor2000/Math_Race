@@ -46,6 +46,9 @@ public class RuntimeStateService {
         int slowdownQuestionsRemaining,
         int hintQuestionsRemaining,
         boolean questionSwapAvailable,
+        int frozenQuestionsRemaining,
+        int luckMeter,
+        int negativeLuckStreak,
         int lastKnownRank
     ) {
         static RuntimeStateSnapshot from(RuntimeParticipantState state) {
@@ -58,6 +61,9 @@ public class RuntimeStateService {
                 state.getSlowdownQuestionsRemaining(),
                 state.getHintQuestionsRemaining(),
                 state.isQuestionSwapAvailable(),
+                state.getFrozenQuestionsRemaining(),
+                state.getLuckMeter(),
+                state.getNegativeLuckStreak(),
                 state.getLastKnownRank()
             );
         }
@@ -72,6 +78,9 @@ public class RuntimeStateService {
             state.setSlowdownQuestionsRemaining(slowdownQuestionsRemaining);
             state.setHintQuestionsRemaining(hintQuestionsRemaining);
             state.setQuestionSwapAvailable(questionSwapAvailable);
+            state.setFrozenQuestionsRemaining(frozenQuestionsRemaining);
+            state.setLuckMeter(luckMeter);
+            state.setNegativeLuckStreak(negativeLuckStreak);
             state.setLastKnownRank(lastKnownRank);
             return state;
         }

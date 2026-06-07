@@ -91,6 +91,7 @@ export function FloatingNumbersBackground() {
 
 export function LoginPage({
   activeRole,
+  initialRoomCode = "",
   openRaces = [],
   onRoleChange,
   onTeacherLogin,
@@ -104,7 +105,7 @@ export function LoginPage({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [roomCode, setRoomCode] = useState("");
+  const [roomCode, setRoomCode] = useState(initialRoomCode.toUpperCase());
   const [loading, setLoading] = useState(false);
   const [googleReady, setGoogleReady] = useState(false);
   const [error, setError] = useState(null);
@@ -114,6 +115,13 @@ export function LoginPage({
   useEffect(() => {
     activeRoleRef.current = activeRole;
   }, [activeRole]);
+
+  useEffect(() => {
+    if (initialRoomCode) {
+      setRoomCode(initialRoomCode.toUpperCase());
+      onRoleChange("student");
+    }
+  }, [initialRoomCode, onRoleChange]);
 
   useEffect(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;

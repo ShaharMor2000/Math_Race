@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import { CreateRace } from "./components/CreateRace";
 import { FinalResults } from "./components/FinalResults";
 import { LiveRaceDashboard } from "./components/LiveRaceDashboard";
@@ -12,7 +13,8 @@ import { api } from "./services/api";
 import { session } from "./services/session";
 
 function App() {
-  const [role, setRole] = useState("teacher");
+  const { roomCode: joinRoomCode } = useParams();
+  const [role, setRole] = useState(joinRoomCode ? "student" : "teacher");
   const [teacherId, setTeacherId] = useState(session.getTeacherId());
   const [rooms, setRooms] = useState([]);
   const [isCreatingRace, setIsCreatingRace] = useState(false);
@@ -21,6 +23,7 @@ function App() {
   const [participants, setParticipants] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [teacherEventMessage, setTeacherEventMessage] = useState(null);
+  const [teacherEventFeed, setTeacherEventFeed] = useState([]);
   const [teacherFinalRows, setTeacherFinalRows] = useState(null);
   const [teacherWinnerName, setTeacherWinnerName] = useState(null);
 
@@ -59,11 +62,39 @@ function App() {
     void refreshOpenRaces();
   }, [role, studentRoomCode]);
 
+  const pushTeacherEvent = useCallback((type, message) => {
+    if (!message) return;
+    setTeacherEventFeed((prev) => [
+      {
+        id: `${Date.now()}-${Math.random()}`,
+        type,
+        message,
+        time: new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+      },
+      ...prev
+    ].slice(0, 25));
+    setTeacherEventMessage(message);
+  }, []);
+
+  const fetchNextQuestion = useCallback(async (roomCode, attempt = 0) => {
+    try {
+      const q = await api.nextQuestion(roomCode);
+      setStudentQuestion(q);
+    } catch (error) {
+      const message = String(error?.message || "");
+      if (message.includes("VEHICLE_FROZEN") && attempt < 4) {
+        setStudentEventMessage("הרכב נעצר לרגע אחרי כישלון באוטוסטרדה...");
+        window.setTimeout(() => void fetchNextQuestion(roomCode, attempt + 1), 3000);
+        return;
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (!studentRoomCode || !studentParticipantId || studentParticipantStatus !== "ACTIVE") return;
     if (studentQuestion || studentFinalRows) return;
-    void api.nextQuestion(studentRoomCode).then((q) => setStudentQuestion(q)).catch(() => {});
-  }, [studentRoomCode, studentParticipantId, studentParticipantStatus, studentQuestion, studentFinalRows]);
+    void fetchNextQuestion(studentRoomCode);
+  }, [studentRoomCode, studentParticipantId, studentParticipantStatus, studentQuestion, studentFinalRows, fetchNextQuestion]);
 
   const refreshTeacherRooms = async () => {
     const list = await api.listTeacherRaces();
@@ -151,8 +182,7 @@ function App() {
       res.participant.participantStatus === "PENDING" ? "נרשמת בהצלחה. ממתין לאישור מורה..." : null
     );
     if (res.room.status === "RUNNING" && res.participant.participantStatus === "ACTIVE") {
-      const q = await api.nextQuestion(res.room.roomCode);
-      setStudentQuestion(q);
+      await fetchNextQuestion(res.room.roomCode);
     }
   };
 
@@ -190,8 +220,7 @@ function App() {
     const hasPathDecision = res.triggeredEvent?.type === "PATH_DECISION";
     setPendingPathDecision(hasPathDecision);
     if (!hasPathDecision) {
-      const q = await api.nextQuestion(studentRoomCode);
-      setStudentQuestion(q);
+      await fetchNextQuestion(studentRoomCode);
     } else {
       setStudentQuestion(null);
     }
@@ -208,8 +237,7 @@ function App() {
     if (!studentRoomCode || !studentParticipantId) return;
     await api.choosePath(studentRoomCode, choice);
     setPendingPathDecision(false);
-    const q = await api.nextQuestion(studentRoomCode);
-    setStudentQuestion(q);
+    await fetchNextQuestion(studentRoomCode);
   };
 
   const logoutTeacher = () => {
@@ -225,6 +253,7 @@ function App() {
     setRoomMeta(null);
     setParticipants([]);
     setLeaderboard([]);
+    setTeacherEventFeed([]);
   };
 
   const resetStudentFlow = () => {
@@ -260,17 +289,18 @@ function App() {
     }
     if (event.type === "game_event") {
       const msg = String(payload.message || "");
-      if (role === "teacher") setTeacherEventMessage(msg);
+      const type = String(payload.type || "game_event");
+      if (role === "teacher") pushTeacherEvent(type, msg);
       else setStudentEventMessage(msg);
     }
     if (event.type === "bonus") {
       const msg = String(payload.message || "Bonus received");
-      if (role === "teacher") setTeacherEventMessage(msg);
+      if (role === "teacher") pushTeacherEvent("bonus", msg);
       else setStudentEventMessage(msg);
     }
     if (event.type === "overtake") {
       const msg = `${payload.displayName} עקף למקום ${payload.toRank}`;
-      if (role === "teacher") setTeacherEventMessage(msg);
+      if (role === "teacher") pushTeacherEvent("overtake", msg);
       else setStudentEventMessage(msg);
     }
     if (event.type === "registration_requested" && role === "teacher" && activeRoomCode) {
@@ -295,8 +325,11 @@ function App() {
         setStudentEventMessage("ההרשמה נדחתה על ידי המורה.");
       }
     }
-    if (event.type === "race_started" && studentRoomCode && studentParticipantId && studentParticipantStatus === "ACTIVE") {
-      void api.nextQuestion(studentRoomCode).then((q) => setStudentQuestion(q));
+    if (event.type === "race_started") {
+      if (role === "teacher") pushTeacherEvent("race_started", "המרוץ התחיל!");
+      if (studentRoomCode && studentParticipantId && studentParticipantStatus === "ACTIVE") {
+        void fetchNextQuestion(studentRoomCode);
+      }
     }
     if (event.type === "race_paused" || event.type === "race_resumed") {
       if (activeRoomCode) void loadRoomDetails(activeRoomCode);
@@ -323,6 +356,7 @@ function App() {
       <main className="auth-app">
         <LoginPage
           activeRole={role}
+          initialRoomCode={joinRoomCode || ""}
           openRaces={openRaces}
           onRoleChange={setRole}
           onTeacherLogin={handleTeacherLogin}
@@ -395,6 +429,7 @@ function App() {
               participants={participants.filter((p) => p.participantStatus === "ACTIVE")}
               leaderboard={leaderboard}
               eventMessage={teacherEventMessage}
+              eventFeed={teacherEventFeed}
               onEndRace={endRace}
               onPauseRace={pauseRace}
               onResumeRace={resumeRace}

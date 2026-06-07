@@ -46,7 +46,12 @@ import java.util.stream.IntStream;
 @RequiredArgsConstructor
 public class GameEngineService {
 
-    private static final int PATH_DECISION_CHANCE_PERCENT = 18;
+    private static final int PATH_DECISION_CHANCE_PERCENT = 12;
+    private static final int DECISION_METER_PER_CORRECT = 22;
+    private static final int DECISION_METER_THRESHOLD = 100;
+    private static final int HIGHWAY_SUCCESS_BONUS = 150;
+    private static final int HIGHWAY_FAILURE_PENALTY = 70;
+    private static final int DIRT_ROAD_CORRECT_CAP = 14;
 
     private final RaceRoomService raceRoomService;
     private final RaceRoomRepository raceRoomRepository;
@@ -117,6 +122,11 @@ public class GameEngineService {
         ensureRacePlayable(room);
 
         RuntimeParticipantState state = sessionState(room.getId(), participant);
+        if (state.getFrozenQuestionsRemaining() > 0) {
+            state.setFrozenQuestionsRemaining(state.getFrozenQuestionsRemaining() - 1);
+            persistState(participant, state);
+            throw new ApiException("VEHICLE_FROZEN", "הרכב נעצר לשאלה אחת אחרי כישלון באוטוסטרדה");
+        }
         DifficultyLevel difficulty = resolveDifficulty(room, participant, state);
         boolean hintActive = state.getHintQuestionsRemaining() > 0;
         boolean reducedOptions = hintActive;
@@ -229,7 +239,9 @@ public class GameEngineService {
             participant.setCorrectCount(participant.getCorrectCount() + 1);
             participant.setStreakCount(participant.getStreakCount() + 1);
 
-            LuckEventEngine.LuckOutcome luckOutcome = luckEventEngine.maybeTrigger(room, participant);
+            LuckEventEngine.LuckOutcome luckOutcome = luckEventEngine.maybeTrigger(
+                room, participant, state, roomLeaderProgress, avgProgress
+            );
             applyLuckEffects(state, luckOutcome);
             int luckModifier = luckOutcome.exists() ? luckOutcome.impactPoints() : 0;
             double balanceMultiplier = scoringEngine.calculateBalanceMultiplier(participant, roomLeaderProgress, avgProgress);
@@ -243,6 +255,12 @@ public class GameEngineService {
                 balanceMultiplier,
                 luckModifier
             );
+
+            if (isHighwayChallenge(state)) {
+                delta += HIGHWAY_SUCCESS_BONUS;
+            } else if (isDirtRoadChallenge(state)) {
+                delta = Math.min(DIRT_ROAD_CORRECT_CAP, Math.max(8, (int) Math.round(delta * 0.55)));
+            }
 
             if (state.getSlowdownQuestionsRemaining() > 0) {
                 delta = (int) Math.round(delta * 0.5);
@@ -258,15 +276,18 @@ public class GameEngineService {
                     luckOutcome.impactPoints(),
                     luckOutcome.message()
                 );
-            } else if (room.isEnablePathChoice() && !isPathChallengeActive(state) && !state.isPendingPathDecision()
-                && random.nextInt(100) < PATH_DECISION_CHANCE_PERCENT) {
-                triggerPathDecision(room, participant, state);
-                eventData = new SubmitAnswerResponse.EventData("PATH_DECISION", 0, "בחר מסלול: אוטוסטרדה או דרך עפר");
+            } else {
+                eventData = maybeTriggerPathDecision(room, participant, state);
             }
         } else {
             participant.setWrongCount(participant.getWrongCount() + 1);
             participant.setStreakCount(0);
             delta = scoringEngine.calculateWrongDelta(state.getCurrentPathChoice());
+            if (isHighwayChallenge(state)) {
+                delta = -HIGHWAY_FAILURE_PENALTY;
+                state.setFrozenQuestionsRemaining(1);
+                publishStalledEvent(room, participant);
+            }
         }
 
         consumePathProgress(state);
@@ -374,6 +395,7 @@ public class GameEngineService {
         state.setDecisionMeter(0);
         applyPathChoice(state, request.choice());
         persistState(participant, state);
+        publishPathChoiceEvent(room, participant, request.choice());
 
         DifficultyLevel nextDifficulty = request.choice() == PathChoice.HIGHWAY ? DifficultyLevel.HARD
             : request.choice() == PathChoice.DIRT_ROAD ? DifficultyLevel.EASY : DifficultyLevel.MEDIUM;
@@ -388,14 +410,88 @@ public class GameEngineService {
         return buildLeaderboard(room);
     }
 
+    private SubmitAnswerResponse.EventData maybeTriggerPathDecision(
+        RaceRoom room,
+        RaceParticipant participant,
+        RuntimeParticipantState state
+    ) {
+        if (!room.isEnablePathChoice() || isPathChallengeActive(state) || state.isPendingPathDecision()) {
+            return null;
+        }
+
+        state.setDecisionMeter(state.getDecisionMeter() + DECISION_METER_PER_CORRECT);
+        boolean meterReady = state.getDecisionMeter() >= DECISION_METER_THRESHOLD;
+        boolean randomReady = random.nextInt(100) < PATH_DECISION_CHANCE_PERCENT;
+        if (!meterReady && !randomReady) {
+            return null;
+        }
+
+        triggerPathDecision(room, participant, state);
+        return new SubmitAnswerResponse.EventData("PATH_DECISION", 0, "בחר מסלול: אוטוסטרדה או דרך עפר");
+    }
+
     private void triggerPathDecision(RaceRoom room, RaceParticipant participant, RuntimeParticipantState state) {
         state.setPendingPathDecision(true);
+        state.setDecisionMeter(0);
         GameEvent event = new GameEvent();
         event.setRaceRoom(room);
         event.setRaceParticipant(participant);
         event.setEventType(EventType.PATH_DECISION);
         event.setPayloadJson("{\"message\":\"בחר מסלול: אוטוסטרדה או דרך עפר\"}");
         gameEventRepository.save(event);
+    }
+
+    private void publishPathChoiceEvent(RaceRoom room, RaceParticipant participant, PathChoice choice) {
+        String displayName = participant.getStudent().getDisplayName();
+        String pathLabel = switch (choice) {
+            case HIGHWAY -> "אוטוסטרדה";
+            case DIRT_ROAD -> "דרך עפר";
+            default -> "מסלול רגיל";
+        };
+        String message = displayName + " בחר " + pathLabel;
+
+        GameEvent event = new GameEvent();
+        event.setRaceRoom(room);
+        event.setRaceParticipant(participant);
+        event.setEventType(EventType.PATH_CHOICE);
+        event.setPayloadJson("{\"choice\":\"" + choice.name() + "\",\"message\":\"" + message + "\"}");
+        gameEventRepository.save(event);
+
+        sseEventPublisher.publish(room.getRoomCode(), "game_event", Map.of(
+            "participantId", participant.getId(),
+            "displayName", displayName,
+            "type", "PATH_CHOICE",
+            "impact", 0,
+            "message", message
+        ));
+    }
+
+    private void publishStalledEvent(RaceRoom room, RaceParticipant participant) {
+        String displayName = participant.getStudent().getDisplayName();
+        String message = displayName + " — סטול! הרכב נעצר אחרי כישלון באוטוסטרדה";
+
+        GameEvent event = new GameEvent();
+        event.setRaceRoom(room);
+        event.setRaceParticipant(participant);
+        event.setEventType(EventType.STALLED);
+        event.setPayloadJson("{\"message\":\"" + message + "\"}");
+        gameEventRepository.save(event);
+
+        sseEventPublisher.publish(room.getRoomCode(), "game_event", Map.of(
+            "participantId", participant.getId(),
+            "displayName", displayName,
+            "type", "STALLED",
+            "impact", 0,
+            "message", message
+        ));
+    }
+
+    private boolean isHighwayChallenge(RuntimeParticipantState state) {
+        return state.getCurrentPathChoice() == PathChoice.HIGHWAY && state.getHighwayQuestionsRemaining() > 0;
+    }
+
+    private boolean isDirtRoadChallenge(RuntimeParticipantState state) {
+        return state.getCurrentPathChoice() == PathChoice.DIRT_ROAD && state.getDirtRoadQuestionsRemaining() > 0;
     }
 
     private RuntimeParticipantState sessionState(Long roomId, RaceParticipant participant) {
@@ -494,8 +590,7 @@ public class GameEngineService {
     }
 
     private boolean isPathChallengeActive(RuntimeParticipantState state) {
-        return (state.getCurrentPathChoice() == PathChoice.HIGHWAY && state.getHighwayQuestionsRemaining() > 0)
-            || (state.getCurrentPathChoice() == PathChoice.DIRT_ROAD && state.getDirtRoadQuestionsRemaining() > 0);
+        return isHighwayChallenge(state) || isDirtRoadChallenge(state);
     }
 
     private void consumePathProgress(RuntimeParticipantState state) {
