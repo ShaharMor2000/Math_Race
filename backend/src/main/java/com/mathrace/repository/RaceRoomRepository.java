@@ -12,4 +12,6 @@ public interface RaceRoomRepository extends JpaRepository<RaceRoom, Long> {
     Optional<RaceRoom> findByRoomCode(String roomCode);
     List<RaceRoom> findByTeacherOrderByCreatedAtDesc(Teacher teacher);
     List<RaceRoom> findByStatusOrderByCreatedAtDesc(RaceRoomStatus status);
+
+    List<RaceRoom> findByStatusInOrderByCreatedAtDesc(List<RaceRoomStatus> statuses);
 }

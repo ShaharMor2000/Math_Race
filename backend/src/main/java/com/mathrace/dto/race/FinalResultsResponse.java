@@ -5,6 +5,7 @@ import java.util.List;
 public record FinalResultsResponse(
     String roomCode,
     Long winnerParticipantId,
+    String winnerName,
     List<ResultRow> leaderboard
 ) {
     public record ResultRow(
@@ -12,6 +13,10 @@ public record FinalResultsResponse(
         String displayName,
         int finalProgress,
         int finalScore,
-        double accuracyPct
+        double accuracyPct,
+        Integer avgResponseMs,
+        int totalCorrect,
+        int totalWrong,
+        int totalEvents
     ) {}
 }

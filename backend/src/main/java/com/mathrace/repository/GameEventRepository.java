@@ -8,4 +8,6 @@ import java.util.List;
 
 public interface GameEventRepository extends JpaRepository<GameEvent, Long> {
     List<GameEvent> findTop50ByRaceRoomOrderByCreatedAtDesc(RaceRoom raceRoom);
+
+    long countByRaceParticipantId(Long participantId);
 }

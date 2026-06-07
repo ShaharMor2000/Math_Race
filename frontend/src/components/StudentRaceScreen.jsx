@@ -1,4 +1,3 @@
-import { DocNote } from "./DocNote";
 import { QuestionCard } from "./QuestionCard";
 
 export function StudentRaceScreen({
@@ -8,17 +7,15 @@ export function StudentRaceScreen({
   question,
   eventMessage,
   pendingPathDecision,
+  answerFeedback,
   onAnswer,
-  onChoosePath
+  onChoosePath,
+  onSwapQuestion
 }) {
   return (
     <section className="stack">
       <div className="card">
         <h2>מרוץ תלמיד - {roomCode}</h2>
-        <DocNote
-          title="Student Race Screen"
-          text="This page is the active gameplay UI for each student. It shows personal progress, score, path-choice events, question flow, and live feedback."
-        />
         <p>התקדמות: {progress}/1000</p>
         <p>ניקוד: {score}</p>
         <div className="progress-bar">
@@ -27,13 +24,29 @@ export function StudentRaceScreen({
       </div>
 
       {pendingPathDecision ? (
-        <div className="card row">
-          <button onClick={() => void onChoosePath("HIGHWAY")}>אוטוסטרדה (סיכון/תגמול)</button>
-          <button onClick={() => void onChoosePath("DIRT_ROAD")}>דרך עפר (יציב)</button>
+        <div className="card path-choice">
+          <h3>צומת — בחר מסלול</h3>
+          <div className="row">
+            <button className="highway-btn" onClick={() => void onChoosePath("HIGHWAY")}>
+              אוטוסטרדה (סיכון/תגמול גבוה)
+            </button>
+            <button className="dirt-btn" onClick={() => void onChoosePath("DIRT_ROAD")}>
+              דרך עפר (יציב ובטוח)
+            </button>
+          </div>
         </div>
       ) : null}
 
-      {question ? <QuestionCard question={question} onAnswer={onAnswer} /> : <div className="card">ממתין לשאלה...</div>}
+      {question ? (
+        <QuestionCard
+          question={question}
+          onAnswer={onAnswer}
+          onSwap={onSwapQuestion}
+          feedback={answerFeedback}
+        />
+      ) : (
+        <div className="card">ממתין לשאלה...</div>
+      )}
       {eventMessage ? <div className="event-toast">{eventMessage}</div> : null}
     </section>
   );

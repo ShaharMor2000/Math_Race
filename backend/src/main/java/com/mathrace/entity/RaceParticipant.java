@@ -62,4 +62,7 @@ public class RaceParticipant extends BaseEntity {
 
     private Integer avgResponseMs;
     private LocalDateTime lastAnswerAt;
+
+    @Column(columnDefinition = "TEXT")
+    private String runtimeStateJson;
 }

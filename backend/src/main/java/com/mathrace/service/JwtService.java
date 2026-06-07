@@ -1,5 +1,7 @@
 package com.mathrace.service;
 
+import com.mathrace.security.AuthPrincipal;
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,6 +30,23 @@ public class JwtService {
         return issueToken(Map.of("participantId", participantId, "roomId", roomId, "role", "STUDENT"));
     }
 
+    public Claims parseClaims(String token) {
+        return Jwts.parser()
+            .verifyWith(secretKey())
+            .build()
+            .parseSignedClaims(token)
+            .getPayload();
+    }
+
+    public AuthPrincipal toPrincipal(Claims claims) {
+        String role = claims.get("role", String.class);
+        Long teacherId = toLong(claims.get("teacherId"));
+        Long participantId = toLong(claims.get("participantId"));
+        Long roomId = toLong(claims.get("roomId"));
+        String email = claims.get("email", String.class);
+        return new AuthPrincipal(role, teacherId, participantId, roomId, email);
+    }
+
     private String issueToken(Map<String, Object> claims) {
         Instant now = Instant.now();
         Instant exp = now.plusSeconds(expirationMinutes * 60);
@@ -41,5 +60,15 @@ public class JwtService {
 
     private SecretKey secretKey() {
         return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private Long toLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return Long.parseLong(value.toString());
     }
 }

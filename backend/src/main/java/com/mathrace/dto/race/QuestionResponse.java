@@ -11,6 +11,19 @@ public record QuestionResponse(
     String questionText,
     List<String> options,
     int maxTimeMs,
-    LocalDateTime issuedAt
+    LocalDateTime issuedAt,
+    boolean hintActive,
+    boolean reducedOptions,
+    boolean swapAvailable
 ) {
+    public QuestionResponse(
+        Long questionId,
+        DifficultyLevel difficulty,
+        String questionText,
+        List<String> options,
+        int maxTimeMs,
+        LocalDateTime issuedAt
+    ) {
+        this(questionId, difficulty, questionText, options, maxTimeMs, issuedAt, false, false, false);
+    }
 }

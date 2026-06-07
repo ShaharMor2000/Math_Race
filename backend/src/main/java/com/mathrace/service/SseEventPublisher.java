@@ -14,26 +14,71 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @Service
 public class SseEventPublisher {
 
-    private final Map<String, List<SseEmitter>> emittersByRoom = new ConcurrentHashMap<>();
+    private final Map<String, List<Subscriber>> subscribersByRoom = new ConcurrentHashMap<>();
 
-    public SseEmitter subscribe(String roomCode) {
+    public SseEmitter subscribe(String roomCode, String role, Long participantId) {
         SseEmitter emitter = new SseEmitter(0L);
-        emittersByRoom.computeIfAbsent(roomCode, k -> new CopyOnWriteArrayList<>()).add(emitter);
+        Subscriber subscriber = new Subscriber(emitter, role, participantId);
+        subscribersByRoom.computeIfAbsent(roomCode, k -> new CopyOnWriteArrayList<>()).add(subscriber);
 
-        emitter.onCompletion(() -> removeEmitter(roomCode, emitter));
-        emitter.onTimeout(() -> removeEmitter(roomCode, emitter));
-        emitter.onError(ex -> removeEmitter(roomCode, emitter));
+        emitter.onCompletion(() -> removeSubscriber(roomCode, subscriber));
+        emitter.onTimeout(() -> removeSubscriber(roomCode, subscriber));
+        emitter.onError(ex -> removeSubscriber(roomCode, subscriber));
 
         send(emitter, "heartbeat", new StreamEventDto(roomCode, "heartbeat", LocalDateTime.now(), Map.of("status", "connected")));
         return emitter;
     }
 
     public void publish(String roomCode, String eventType, Map<String, Object> payload) {
+        publish(roomCode, eventType, payload, null);
+    }
+
+    public void publish(String roomCode, String eventType, Map<String, Object> payload, Long targetParticipantId) {
         StreamEventDto dto = new StreamEventDto(roomCode, eventType, LocalDateTime.now(), payload);
-        List<SseEmitter> emitters = emittersByRoom.getOrDefault(roomCode, List.of());
-        for (SseEmitter emitter : emitters) {
-            send(emitter, eventType, dto);
+        List<Subscriber> subscribers = subscribersByRoom.getOrDefault(roomCode, List.of());
+        for (Subscriber subscriber : subscribers) {
+            if (!shouldDeliver(subscriber, eventType, payload, targetParticipantId)) {
+                continue;
+            }
+            send(subscriber.emitter(), eventType, dto);
         }
+    }
+
+    private boolean shouldDeliver(
+        Subscriber subscriber,
+        String eventType,
+        Map<String, Object> payload,
+        Long targetParticipantId
+    ) {
+        if (targetParticipantId != null) {
+            Object payloadParticipantId = payload.get("participantId");
+            if (payloadParticipantId != null && !targetParticipantId.equals(toLong(payloadParticipantId))) {
+                return false;
+            }
+        }
+
+        if ("TEACHER".equalsIgnoreCase(subscriber.role())) {
+            return true;
+        }
+
+        if ("STUDENT".equalsIgnoreCase(subscriber.role())) {
+            return switch (eventType) {
+                case "question_ready", "registration_approved", "registration_rejected" -> {
+                    Object payloadParticipantId = payload.get("participantId");
+                    yield payloadParticipantId == null || subscriber.participantId() == null
+                        || subscriber.participantId().equals(toLong(payloadParticipantId));
+                }
+                case "game_event", "bonus", "position_update" -> {
+                    Object payloadParticipantId = payload.get("participantId");
+                    yield payloadParticipantId == null || subscriber.participantId() == null
+                        || subscriber.participantId().equals(toLong(payloadParticipantId));
+                }
+                case "registration_requested" -> false;
+                default -> true;
+            };
+        }
+
+        return true;
     }
 
     private void send(SseEmitter emitter, String eventType, StreamEventDto dto) {
@@ -44,7 +89,16 @@ public class SseEventPublisher {
         }
     }
 
-    private void removeEmitter(String roomCode, SseEmitter emitter) {
-        emittersByRoom.getOrDefault(roomCode, List.of()).remove(emitter);
+    private void removeSubscriber(String roomCode, Subscriber subscriber) {
+        subscribersByRoom.getOrDefault(roomCode, List.of()).remove(subscriber);
     }
+
+    private Long toLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return Long.parseLong(value.toString());
+    }
+
+    private record Subscriber(SseEmitter emitter, String role, Long participantId) {}
 }

@@ -974,6 +974,124 @@ button.ghost {
   background: #e4e4e7;
 }
 
+.room-code-large {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+}
+
+.locked-banner,
+.winner-banner,
+.hint-banner {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 196, 77, 0.15);
+  border: 1px solid rgba(255, 196, 77, 0.35);
+}
+
+.winner-banner {
+  background: rgba(119, 255, 144, 0.15);
+  border-color: rgba(119, 255, 144, 0.35);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.podium {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.podium-place {
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.podium-place.place-1 {
+  transform: translateY(-8px);
+  border: 1px solid rgba(255, 215, 0, 0.5);
+}
+
+.podium-rank {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.timer.danger {
+  color: #ff7b7b;
+  animation: pulse 0.8s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.question-card.correct-flash {
+  box-shadow: 0 0 0 2px rgba(119, 255, 144, 0.8);
+}
+
+.question-card.wrong-flash {
+  box-shadow: 0 0 0 2px rgba(255, 123, 123, 0.8);
+}
+
+.path-choice .highway-btn {
+  background: linear-gradient(90deg, #ff8a00, #ff4d4d);
+}
+
+.path-choice .dirt-btn {
+  background: linear-gradient(90deg, #8b5a2b, #c9a66b);
+}
+
+.live-dashboard .projector-header h2 {
+  font-size: 2rem;
+}
+
+.global-timer {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.open-races-login {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.open-race-row.compact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.inner-tabs {
+  margin-bottom: 8px;
+}
+
+.add-student-form {
+  margin: 12px 0 20px;
+  gap: 8px;
+}
+
+.muted {
+  opacity: 0.7;
+  font-size: 0.9rem;
+}
+
+.swap-btn {
+  margin-top: 10px;
+}
+
 @media (max-width: 768px) {
   .auth-page {
     grid-template-columns: 1fr;

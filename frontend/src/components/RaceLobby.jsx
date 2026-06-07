@@ -1,17 +1,39 @@
-import { DocNote } from "./DocNote";
+import { useState } from "react";
 
-export function RaceLobby({ roomCode, participants, onApproveParticipant, onRejectParticipant, onStartRace }) {
+export function RaceLobby({
+  roomCode,
+  roomStatus,
+  participants,
+  onApproveParticipant,
+  onRejectParticipant,
+  onAddStudent,
+  onStartRace
+}) {
+  const [newStudentName, setNewStudentName] = useState("");
   const pending = participants.filter((p) => p.participantStatus === "PENDING");
   const approved = participants.filter((p) => p.participantStatus === "ACTIVE");
+
+  const addStudent = async (event) => {
+    event.preventDefault();
+    if (!newStudentName.trim()) return;
+    await onAddStudent(newStudentName.trim());
+    setNewStudentName("");
+  };
 
   return (
     <section className="card">
       <h2>לובי מרוץ</h2>
-      <DocNote
-        title="Race Lobby Page"
-        text="Students register before the race starts. The teacher approves registrations, rejects invalid entries, and starts the race with approved participants."
-      />
-      <p className="room-code">קוד חדר: {roomCode}</p>
+      <p className="room-code-large">קוד חדר: {roomCode}</p>
+      {roomStatus === "LOCKED" ? <p className="locked-banner">החדר ננעל — הגיע למכסת המשתתפים</p> : null}
+
+      <form onSubmit={addStudent} className="row add-student-form">
+        <input
+          value={newStudentName}
+          onChange={(e) => setNewStudentName(e.target.value)}
+          placeholder="הוסף תלמיד לרוסטר"
+        />
+        <button type="submit">הוסף</button>
+      </form>
 
       <h3>ממתינים לאישור ({pending.length})</h3>
       {pending.length === 0 ? <p>אין תלמידים ממתינים כרגע.</p> : null}

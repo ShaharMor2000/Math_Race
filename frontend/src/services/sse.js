@@ -1,10 +1,26 @@
-const API_BASE = "http://localhost:8080/api/v1";
+import { session } from "./session";
 
-export function createRoomStream(roomCode, onEvent) {
-  const es = new EventSource(`${API_BASE}/stream/rooms/${roomCode}`);
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8080/api/v1";
+
+export function createRoomStream(roomCode, onEvent, options = {}) {
+  const params = new URLSearchParams();
+  if (options.role) params.set("role", options.role);
+  if (options.participantId) params.set("participantId", String(options.participantId));
+
+  const token = options.role === "STUDENT" ? session.getStudentToken() : session.getTeacherToken();
+  if (token) params.set("token", token);
+
+  const query = params.toString();
+  const url = `${API_BASE}/stream/rooms/${roomCode}${query ? `?${query}` : ""}`;
+  const es = new EventSource(url);
+
   const eventNames = [
     "heartbeat",
     "race_started",
+    "race_paused",
+    "race_resumed",
+    "room_locked",
+    "room_unlocked",
     "position_update",
     "leaderboard_update",
     "game_event",
@@ -23,5 +39,6 @@ export function createRoomStream(roomCode, onEvent) {
       onEvent(payload);
     });
   });
+
   return es;
 }

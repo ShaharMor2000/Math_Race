@@ -14,6 +14,7 @@ export function CreateRace({ onSubmit, onCancel }) {
   const [initialDifficulty, setInitialDifficulty] = useState("MEDIUM");
   const [enableLuckEvents, setEnableLuckEvents] = useState(true);
   const [enablePathChoice, setEnablePathChoice] = useState(true);
+  const [raceDurationMinutes, setRaceDurationMinutes] = useState(45);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -24,7 +25,8 @@ export function CreateRace({ onSubmit, onCancel }) {
       questionTimeMs,
       initialDifficulty,
       enableLuckEvents,
-      enablePathChoice
+      enablePathChoice,
+      raceDurationMinutes
     });
   };
 
@@ -103,6 +105,21 @@ export function CreateRace({ onSubmit, onCancel }) {
                 step={5000}
                 value={questionTimeMs}
                 onChange={(e) => setQuestionTimeMs(Number(e.target.value))}
+              />
+            </label>
+
+            <label className="range-field">
+              <span className="range-field-top">
+                <span>משך מרוץ</span>
+                <strong>{raceDurationMinutes} דק׳</strong>
+              </span>
+              <input
+                type="range"
+                min={5}
+                max={120}
+                step={5}
+                value={raceDurationMinutes}
+                onChange={(e) => setRaceDurationMinutes(Number(e.target.value))}
               />
             </label>
           </div>

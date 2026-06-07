@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Getter
@@ -41,8 +42,8 @@ public class RaceResult extends BaseEntity {
     @Column(nullable = false)
     private int finalScore;
 
-    @Column(nullable = false)
-    private double accuracyPct;
+    @Column(nullable = false, precision = 5, scale = 2)
+    private BigDecimal accuracyPct;
 
     private Integer avgResponseMs;
 

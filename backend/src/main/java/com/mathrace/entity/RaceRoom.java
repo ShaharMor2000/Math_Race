@@ -64,4 +64,7 @@ public class RaceRoom extends BaseEntity {
     private LocalDateTime startAt;
     private LocalDateTime finishAt;
     private Long winnerParticipantId;
+
+    @Column(nullable = false)
+    private int raceDurationMinutes = 45;
 }

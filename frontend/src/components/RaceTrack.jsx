@@ -1,9 +1,13 @@
+const CAR_ICONS = ["🚗", "🏎️", "🚙", "🛻", "🚕", "🚓", "🏁", "🚘"];
+
 export function RaceTrack({ participants }) {
   return (
     <div className="track">
-      {participants.map((p) => (
+      {participants.map((p, index) => (
         <div key={p.participantId} className="lane">
-          <span className="lane-name">{p.displayName}</span>
+          <span className="lane-name">
+            {CAR_ICONS[index % CAR_ICONS.length]} {p.displayName}
+          </span>
           <div className="lane-progress">
             <div
               className="car"

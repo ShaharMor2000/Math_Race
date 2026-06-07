@@ -34,29 +34,29 @@ public class LuckEventEngine {
         if (roll < 8) {
             eventType = EventType.TURBO;
             impact = 40;
-            message = "Turbo! +40";
+            message = "טורבו! +40 התקדמות";
         } else if (roll < 14) {
             eventType = EventType.BOOST;
             impact = 20;
-            message = "Boost! +20";
+            message = "בוסט! +20 התקדמות";
         } else if (roll < 18) {
             eventType = EventType.HINT;
             impact = 0;
-            message = "Hint unlocked";
+            message = "רמז — פחות אפשרויות תשובה";
             effectQuestions = 1;
         } else if (roll < 21) {
             eventType = EventType.SWAP_QUESTION;
             impact = 0;
-            message = "Question swap available";
+            message = "אפשרות להחלפת שאלה";
             effectQuestions = 1;
         } else if (roll < 23) {
             eventType = EventType.MALFUNCTION;
             impact = -15;
-            message = "Malfunction! -15";
+            message = "תקלה ברכב! -15";
         } else {
             eventType = EventType.SLOWDOWN;
             impact = 0;
-            message = "Slowdown: 50% speed for 2 questions";
+            message = "האטה — מהירות מופחתת לשתי שאלות";
             effectQuestions = 2;
         }
 

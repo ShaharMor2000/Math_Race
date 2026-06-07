@@ -24,14 +24,14 @@ public class ScoringEngine {
         };
         double speedFactor = clamp(0.5, 1.5, 1.5 - ((double) responseTimeMs / Math.max(1, maxTimeMs)));
         int streakBonus = streakCount > 0 && streakCount % 5 == 0 ? 15 : (streakCount > 0 && streakCount % 3 == 0 ? 8 : 0);
-        double pathMultiplier = pathChoice == PathChoice.HIGHWAY ? 1.4 : (pathChoice == PathChoice.DIRT_ROAD ? 0.8 : 1.0);
+        double pathMultiplier = pathChoice == PathChoice.HIGHWAY ? 1.8 : (pathChoice == PathChoice.DIRT_ROAD ? 1.1 : 1.0);
 
         return (int) Math.round((basePoints * speedFactor + streakBonus) * pathMultiplier * balanceMultiplier) + luckModifier;
     }
 
     public int calculateWrongDelta(PathChoice pathChoice) {
         if (pathChoice == PathChoice.HIGHWAY) {
-            return -12;
+            return -8;
         }
         if (pathChoice == PathChoice.DIRT_ROAD) {
             return -2;

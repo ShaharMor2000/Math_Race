@@ -24,35 +24,42 @@ public class QuestionGeneratorService {
 
     private final GeneratedQuestionRepository generatedQuestionRepository;
     private final QuestionTemplateRepository questionTemplateRepository;
+    private final TemplateExpressionEvaluator expressionEvaluator;
     private final Random random = new Random();
 
     @Transactional
-    public QuestionResponse generateNextQuestion(RaceRoom room, RaceParticipant participant, DifficultyLevel difficulty) {
+    public QuestionResponse generateNextQuestion(
+        RaceRoom room,
+        RaceParticipant participant,
+        DifficultyLevel difficulty,
+        boolean hintActive,
+        boolean reducedOptions
+    ) {
         QuestionTemplate template = pickTemplate(difficulty);
-        int a = randomOperand(template == null ? 2 : template.getMinOperand(), template == null ? 20 : template.getMaxOperand());
-        int b = randomOperand(template == null ? 2 : template.getMinOperand(), template == null ? 20 : template.getMaxOperand());
-        int c = randomOperand(1, 10);
-
-        String questionText;
-        int answer;
-        if (difficulty == DifficultyLevel.EASY) {
-            questionText = a + " + " + b + " = ?";
-            answer = a + b;
-        } else if (difficulty == DifficultyLevel.MEDIUM) {
-            questionText = a + " x " + b + " = ?";
-            answer = a * b;
+        TemplateExpressionEvaluator.GeneratedQuestionData generatedData;
+        if (template != null) {
+            generatedData = expressionEvaluator.generate(
+                new TemplateExpressionEvaluator.QuestionTemplateView(
+                    template.getExpressionPattern(),
+                    template.getMinOperand(),
+                    template.getMaxOperand(),
+                    template.isAllowNegative()
+                ),
+                random
+            );
         } else {
-            questionText = "(" + a + " x " + b + ") + " + c + " = ?";
-            answer = (a * b) + c;
+            generatedData = fallbackQuestion(difficulty);
         }
 
-        List<String> options = buildOptions(answer);
+        int answer = generatedData.answer();
+        List<String> options = buildOptions(answer, reducedOptions || hintActive);
+
         GeneratedQuestion generated = new GeneratedQuestion();
         generated.setRaceRoom(room);
         generated.setRaceParticipant(participant);
         generated.setTemplate(template);
         generated.setDifficulty(difficulty);
-        generated.setQuestionText(questionText);
+        generated.setQuestionText(generatedData.questionText());
         generated.setCorrectAnswer(String.valueOf(answer));
         generated.setOptionsJson(String.join(",", options));
         generated.setSeedValue(random.nextLong());
@@ -63,10 +70,13 @@ public class QuestionGeneratorService {
         return new QuestionResponse(
             generated.getId(),
             difficulty,
-            questionText,
+            generatedData.questionText(),
             options,
             generated.getMaxTimeMs(),
-            generated.getPresentedAt()
+            generated.getPresentedAt(),
+            hintActive,
+            reducedOptions,
+            false
         );
     }
 
@@ -84,21 +94,35 @@ public class QuestionGeneratorService {
         return templates.get(random.nextInt(templates.size()));
     }
 
+    private TemplateExpressionEvaluator.GeneratedQuestionData fallbackQuestion(DifficultyLevel difficulty) {
+        int a = randomOperand(2, 20);
+        int b = randomOperand(2, 20);
+        int c = randomOperand(1, 10);
+        return switch (difficulty) {
+            case EASY -> new TemplateExpressionEvaluator.GeneratedQuestionData(a + " + " + b + " = ?", a + b);
+            case MEDIUM -> new TemplateExpressionEvaluator.GeneratedQuestionData(a + " x " + b + " = ?", a * b);
+            case HARD -> new TemplateExpressionEvaluator.GeneratedQuestionData("(" + a + " x " + b + ") + " + c + " = ?", (a * b) + c);
+        };
+    }
+
     private int randomOperand(int min, int max) {
         int lower = Math.min(min, max);
         int upper = Math.max(min, max);
         return lower + random.nextInt((upper - lower) + 1);
     }
 
-    private List<String> buildOptions(int answer) {
+    private List<String> buildOptions(int answer, boolean reduced) {
         List<String> options = new ArrayList<>();
         options.add(String.valueOf(answer));
         options.add(String.valueOf(answer + randomOffset()));
-        options.add(String.valueOf(answer - randomOffset()));
-        options.add(String.valueOf(answer + randomOffset()));
-        options = options.stream().distinct().limit(4).toList();
+        if (!reduced) {
+            options.add(String.valueOf(answer - randomOffset()));
+            options.add(String.valueOf(answer + randomOffset()));
+        }
+        options = options.stream().distinct().limit(reduced ? 2 : 4).toList();
         List<String> padded = new ArrayList<>(options);
-        while (padded.size() < 4) {
+        int target = reduced ? 2 : 4;
+        while (padded.size() < target) {
             padded.add(String.valueOf(answer + randomOffset()));
         }
         Collections.shuffle(padded);

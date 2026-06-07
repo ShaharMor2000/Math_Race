@@ -49,7 +49,7 @@ public class GeneratedQuestion extends BaseEntity {
     @Column(nullable = false, length = 80)
     private String correctAnswer;
 
-    @Column(columnDefinition = "json")
+    @Column(length = 4000)
     private String optionsJson;
 
     private Long seedValue;

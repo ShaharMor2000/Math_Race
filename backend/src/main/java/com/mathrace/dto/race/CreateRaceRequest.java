@@ -14,6 +14,7 @@ public record CreateRaceRequest(
     @Min(5000) @Max(60000) int questionTimeMs,
     @NotNull DifficultyLevel initialDifficulty,
     boolean enableLuckEvents,
-    boolean enablePathChoice
+    boolean enablePathChoice,
+    @Min(5) @Max(120) int raceDurationMinutes
 ) {
 }

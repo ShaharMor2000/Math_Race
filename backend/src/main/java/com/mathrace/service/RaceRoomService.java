@@ -1,5 +1,6 @@
 package com.mathrace.service;
 
+import com.mathrace.dto.race.AddStudentRequest;
 import com.mathrace.dto.race.CreateRaceRequest;
 import com.mathrace.dto.race.CreateRaceResponse;
 import com.mathrace.dto.race.FinalResultsResponse;
@@ -61,6 +62,7 @@ public class RaceRoomService {
         room.setInitialDifficulty(request.initialDifficulty());
         room.setEnableLuckEvents(request.enableLuckEvents());
         room.setEnablePathChoice(request.enablePathChoice());
+        room.setRaceDurationMinutes(request.raceDurationMinutes());
         room.setStatus(RaceRoomStatus.LOBBY);
         raceRoomRepository.save(room);
 
@@ -90,10 +92,17 @@ public class RaceRoomService {
             .orElseThrow(() -> new ApiException("ROOM_NOT_FOUND", "Room not found"));
     }
 
+    @Transactional(readOnly = true)
+    public void ensureTeacherOwnsRoom(Long teacherId, RaceRoom room) {
+        if (!room.getTeacher().getId().equals(teacherId)) {
+            throw new ApiException("FORBIDDEN", "Teacher does not own this room");
+        }
+    }
+
     @Transactional
     public JoinRaceResponse joinRace(JoinRaceRequest request) {
         RaceRoom room = getByRoomCodeOrThrow(request.roomCode());
-        if (room.getStatus() != RaceRoomStatus.LOBBY) {
+        if (room.getStatus() != RaceRoomStatus.LOBBY && room.getStatus() != RaceRoomStatus.LOCKED) {
             throw new ApiException("ROOM_CLOSED", "Room is not available");
         }
 
@@ -114,6 +123,8 @@ public class RaceRoomService {
         participant.setCarColor(CAR_COLORS.get(Math.max(0, participant.getLaneNo() - 1)));
         raceParticipantRepository.save(participant);
 
+        maybeLockRoom(room);
+
         String studentToken = jwtService.issueStudentToken(participant.getId(), room.getId());
         sseEventPublisher.publish(room.getRoomCode(), "registration_requested", java.util.Map.of(
             "participantId", participant.getId(),
@@ -128,9 +139,41 @@ public class RaceRoomService {
         );
     }
 
+    @Transactional
+    public RaceParticipant addStudentByTeacher(String roomCode, Long teacherId, AddStudentRequest request) {
+        RaceRoom room = getByRoomCodeOrThrow(roomCode);
+        ensureTeacherOwnsRoom(teacherId, room);
+        if (room.getStatus() != RaceRoomStatus.LOBBY && room.getStatus() != RaceRoomStatus.LOCKED) {
+            throw new ApiException("ROOM_CLOSED", "Room is not available");
+        }
+        if (countRegisteredParticipants(room) >= room.getMaxParticipants()) {
+            throw new ApiException("ROOM_FULL", "Room is full");
+        }
+
+        Student student = new Student();
+        student.setDisplayName(request.displayName());
+        studentRepository.save(student);
+
+        RaceParticipant participant = new RaceParticipant();
+        participant.setRaceRoom(room);
+        participant.setStudent(student);
+        participant.setParticipantStatus(ParticipantStatus.PENDING);
+        participant.setLaneNo(nextLane(room));
+        participant.setCarColor(CAR_COLORS.get(Math.max(0, participant.getLaneNo() - 1)));
+        raceParticipantRepository.save(participant);
+        maybeLockRoom(room);
+
+        sseEventPublisher.publish(room.getRoomCode(), "registration_requested", java.util.Map.of(
+            "participantId", participant.getId(),
+            "displayName", student.getDisplayName(),
+            "laneNo", participant.getLaneNo()
+        ));
+        return participant;
+    }
+
     @Transactional(readOnly = true)
     public List<OpenRaceRoomResponse> listOpenRaces() {
-        return raceRoomRepository.findByStatusOrderByCreatedAtDesc(RaceRoomStatus.LOBBY).stream()
+        return raceRoomRepository.findByStatusInOrderByCreatedAtDesc(List.of(RaceRoomStatus.LOBBY, RaceRoomStatus.LOCKED)).stream()
             .map(room -> {
                 long registered = countRegisteredParticipants(room);
                 return new OpenRaceRoomResponse(
@@ -138,7 +181,8 @@ public class RaceRoomService {
                     room.getTitle(),
                     room.getClassName(),
                     registered,
-                    room.getMaxParticipants()
+                    room.getMaxParticipants(),
+                    room.getStatus()
                 );
             })
             .filter(r -> r.registeredCount() < r.maxParticipants())
@@ -146,8 +190,9 @@ public class RaceRoomService {
     }
 
     @Transactional
-    public RaceParticipant approveParticipant(String roomCode, Long participantId) {
+    public RaceParticipant approveParticipant(String roomCode, Long teacherId, Long participantId) {
         RaceRoom room = getByRoomCodeOrThrow(roomCode);
+        ensureTeacherOwnsRoom(teacherId, room);
         RaceParticipant participant = getParticipantInRoomOrThrow(room, participantId);
         if (participant.getParticipantStatus() != ParticipantStatus.PENDING) {
             throw new ApiException("PARTICIPANT_NOT_PENDING", "Participant is not pending");
@@ -158,29 +203,32 @@ public class RaceRoomService {
         }
         participant.setParticipantStatus(ParticipantStatus.ACTIVE);
         raceParticipantRepository.save(participant);
+        maybeLockRoom(room);
         sseEventPublisher.publish(room.getRoomCode(), "registration_approved", java.util.Map.of(
             "participantId", participant.getId(),
             "displayName", participant.getStudent().getDisplayName()
-        ));
+        ), participant.getId());
         return participant;
     }
 
     @Transactional
-    public void rejectParticipant(String roomCode, Long participantId) {
+    public void rejectParticipant(String roomCode, Long teacherId, Long participantId) {
         RaceRoom room = getByRoomCodeOrThrow(roomCode);
+        ensureTeacherOwnsRoom(teacherId, room);
         RaceParticipant participant = getParticipantInRoomOrThrow(room, participantId);
         String displayName = participant.getStudent().getDisplayName();
         raceParticipantRepository.delete(participant);
+        unlockRoomIfNeeded(room);
         sseEventPublisher.publish(room.getRoomCode(), "registration_rejected", java.util.Map.of(
             "participantId", participantId,
             "displayName", displayName
-        ));
+        ), participantId);
     }
 
     @Transactional
     public RaceRoom startRace(String roomCode) {
         RaceRoom room = getByRoomCodeOrThrow(roomCode);
-        if (room.getStatus() != RaceRoomStatus.LOBBY) {
+        if (room.getStatus() != RaceRoomStatus.LOBBY && room.getStatus() != RaceRoomStatus.LOCKED) {
             throw new ApiException("ROOM_NOT_IN_LOBBY", "Race can start only from lobby");
         }
         long activeCount = raceParticipantRepository.countByRaceRoomAndParticipantStatus(room, ParticipantStatus.ACTIVE);
@@ -216,10 +264,38 @@ public class RaceRoomService {
                 r.getRaceParticipant().getStudent().getDisplayName(),
                 r.getFinalProgress(),
                 r.getFinalScore(),
-                r.getAccuracyPct()
+                r.getAccuracyPct().doubleValue(),
+                r.getAvgResponseMs(),
+                r.getTotalCorrect(),
+                r.getTotalWrong(),
+                r.getTotalEvents()
             ))
             .toList();
-        return new FinalResultsResponse(room.getRoomCode(), room.getWinnerParticipantId(), leaderboard);
+        String winnerName = rows.stream()
+            .filter(r -> room.getWinnerParticipantId() != null && r.getRaceParticipant().getId().equals(room.getWinnerParticipantId()))
+            .map(r -> r.getRaceParticipant().getStudent().getDisplayName())
+            .findFirst()
+            .orElse(leaderboard.isEmpty() ? "" : leaderboard.getFirst().displayName());
+        return new FinalResultsResponse(room.getRoomCode(), room.getWinnerParticipantId(), winnerName, leaderboard);
+    }
+
+    private void maybeLockRoom(RaceRoom room) {
+        if (countRegisteredParticipants(room) >= room.getMaxParticipants() && room.getStatus() == RaceRoomStatus.LOBBY) {
+            room.setStatus(RaceRoomStatus.LOCKED);
+            raceRoomRepository.save(room);
+            sseEventPublisher.publish(room.getRoomCode(), "room_locked", java.util.Map.of(
+                "status", "LOCKED",
+                "message", "החדר ננעל - הגיע למכסת המשתתפים"
+            ));
+        }
+    }
+
+    private void unlockRoomIfNeeded(RaceRoom room) {
+        if (room.getStatus() == RaceRoomStatus.LOCKED && countRegisteredParticipants(room) < room.getMaxParticipants()) {
+            room.setStatus(RaceRoomStatus.LOBBY);
+            raceRoomRepository.save(room);
+            sseEventPublisher.publish(room.getRoomCode(), "room_unlocked", java.util.Map.of("status", "LOBBY"));
+        }
     }
 
     private int nextLane(RaceRoom room) {

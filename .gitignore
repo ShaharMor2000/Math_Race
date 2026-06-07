@@ -5,6 +5,7 @@ frontend/.vite/
 
 # Java
 backend/target/
+backend/src/main/resources/application-local.yml
 *.class
 
 # IDE / OS

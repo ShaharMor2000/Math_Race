@@ -1,12 +1,26 @@
-const API_BASE = "http://localhost:8080/api/v1";
+import { session } from "./session";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8080/api/v1";
 
 async function request(path, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
+
+  if (!headers.Authorization) {
+    const teacherToken = session.getTeacherToken();
+    const studentToken = session.getStudentToken();
+    if (teacherToken && options.useTeacherAuth !== false) {
+      headers.Authorization = `Bearer ${teacherToken}`;
+    } else if (studentToken && options.useStudentAuth) {
+      headers.Authorization = `Bearer ${studentToken}`;
+    }
+  }
+
   const response = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    },
-    ...options
+    ...options,
+    headers
   });
 
   if (!response.ok) {
@@ -18,36 +32,56 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  teacherRegister: (fullName, email, password) =>
+    request("/auth/teacher/register", {
+      method: "POST",
+      body: JSON.stringify({ fullName, email, password })
+    }),
+
   teacherLogin: (email, password) =>
     request("/auth/teacher/login", {
       method: "POST",
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email, password }),
+      useTeacherAuth: false
     }),
 
   teacherGoogleLogin: (idToken) =>
     request("/auth/teacher/google", {
       method: "POST",
-      body: JSON.stringify({ idToken })
+      body: JSON.stringify({ idToken }),
+      useTeacherAuth: false
     }),
 
-  createRace: (teacherId, payload) =>
+  createRace: (payload) =>
     request("/teacher/races", {
       method: "POST",
-      headers: { "X-Teacher-Id": String(teacherId) },
       body: JSON.stringify(payload)
     }),
 
-  listTeacherRaces: (teacherId) =>
-    request("/teacher/races", {
-      headers: { "X-Teacher-Id": String(teacherId) }
-    }),
+  listTeacherRaces: () => request("/teacher/races"),
 
   listOpenRaces: () => request("/student/races/open"),
 
   roomDetails: (roomCode) => request(`/teacher/races/${roomCode}`),
 
+  addStudent: (roomCode, displayName) =>
+    request(`/teacher/races/${roomCode}/students`, {
+      method: "POST",
+      body: JSON.stringify({ displayName })
+    }),
+
   startRace: (roomCode) =>
     request(`/teacher/races/${roomCode}/start`, {
+      method: "POST"
+    }),
+
+  pauseRace: (roomCode) =>
+    request(`/teacher/races/${roomCode}/pause`, {
+      method: "POST"
+    }),
+
+  resumeRace: (roomCode) =>
+    request(`/teacher/races/${roomCode}/resume`, {
       method: "POST"
     }),
 
@@ -69,25 +103,36 @@ export const api = {
   joinRace: (roomCode, displayName) =>
     request("/student/join", {
       method: "POST",
-      body: JSON.stringify({ roomCode, displayName })
+      body: JSON.stringify({ roomCode, displayName }),
+      useTeacherAuth: false
     }),
 
-  nextQuestion: (roomCode, participantId) =>
+  nextQuestion: (roomCode) =>
     request(`/student/races/${roomCode}/question`, {
-      headers: { "X-Participant-Id": String(participantId) }
+      useStudentAuth: true,
+      useTeacherAuth: false
     }),
 
-  submitAnswer: (roomCode, participantId, payload) =>
+  submitAnswer: (roomCode, payload) =>
     request(`/student/races/${roomCode}/answer`, {
       method: "POST",
-      headers: { "X-Participant-Id": String(participantId) },
+      useStudentAuth: true,
+      useTeacherAuth: false,
       body: JSON.stringify(payload)
     }),
 
-  choosePath: (roomCode, participantId, choice) =>
+  swapQuestion: (roomCode, questionId) =>
+    request(`/student/races/${roomCode}/swap?questionId=${questionId}`, {
+      method: "POST",
+      useStudentAuth: true,
+      useTeacherAuth: false
+    }),
+
+  choosePath: (roomCode, choice) =>
     request(`/student/races/${roomCode}/path`, {
       method: "POST",
-      headers: { "X-Participant-Id": String(participantId) },
+      useStudentAuth: true,
+      useTeacherAuth: false,
       body: JSON.stringify({ choice })
     }),
 

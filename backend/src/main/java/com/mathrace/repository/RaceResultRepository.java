@@ -8,4 +8,6 @@ import java.util.List;
 
 public interface RaceResultRepository extends JpaRepository<RaceResult, Long> {
     List<RaceResult> findByRaceRoomOrderByFinalRankAsc(RaceRoom room);
+
+    boolean existsByRaceRoomId(Long roomId);
 }

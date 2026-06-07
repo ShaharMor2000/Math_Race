@@ -40,7 +40,7 @@ public class GameEvent extends BaseEntity {
     @Column(nullable = false, length = 20)
     private String eventScope = "PERSONAL";
 
-    @Column(columnDefinition = "json")
+    @Column(length = 4000)
     private String payloadJson;
 
     @Column(nullable = false)

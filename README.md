@@ -97,10 +97,12 @@ mysql -u root -proot math_race < docs/db-schema.sql
 
 Requirements: Java 21 + Maven
 
-```bash
+```powershell
 cd backend
-mvn spring-boot:run
+.\mvnw.cmd spring-boot:run
 ```
+
+If Maven is installed globally, you can use `mvn spring-boot:run` instead.
 
 ### 3) Frontend
 

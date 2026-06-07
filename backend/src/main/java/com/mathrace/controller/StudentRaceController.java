@@ -8,19 +8,26 @@ import com.mathrace.dto.race.PathChoiceResponse;
 import com.mathrace.dto.race.QuestionResponse;
 import com.mathrace.dto.race.SubmitAnswerRequest;
 import com.mathrace.dto.race.SubmitAnswerResponse;
+import com.mathrace.entity.RaceParticipant;
+import com.mathrace.entity.RaceRoom;
+import com.mathrace.exception.ApiException;
+import com.mathrace.security.AuthPrincipal;
+import com.mathrace.security.AuthSupport;
 import com.mathrace.service.GameEngineService;
 import com.mathrace.service.RaceRoomService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/student")
@@ -41,28 +48,56 @@ public class StudentRaceController {
     }
 
     @GetMapping("/races/{roomCode}/question")
-    public QuestionResponse nextQuestion(
-        @PathVariable String roomCode,
-        @RequestHeader("X-Participant-Id") Long participantId
-    ) {
-        return gameEngineService.nextQuestion(roomCode, participantId);
+    public QuestionResponse nextQuestion(HttpServletRequest request, @PathVariable String roomCode) {
+        AuthPrincipal principal = AuthSupport.requireStudent(request);
+        ensureStudentInRoom(principal, roomCode);
+        return gameEngineService.nextQuestion(roomCode, principal.participantId());
     }
 
     @PostMapping("/races/{roomCode}/answer")
     public SubmitAnswerResponse submitAnswer(
+        HttpServletRequest request,
         @PathVariable String roomCode,
-        @RequestHeader("X-Participant-Id") Long participantId,
-        @Valid @RequestBody SubmitAnswerRequest request
+        @Valid @RequestBody SubmitAnswerRequest submitAnswerRequest
     ) {
-        return gameEngineService.submitAnswer(roomCode, participantId, request);
+        AuthPrincipal principal = AuthSupport.requireStudent(request);
+        ensureStudentInRoom(principal, roomCode);
+        return gameEngineService.submitAnswer(roomCode, principal.participantId(), submitAnswerRequest);
+    }
+
+    @PostMapping("/races/{roomCode}/swap")
+    public QuestionResponse swapQuestion(
+        HttpServletRequest request,
+        @PathVariable String roomCode,
+        @RequestParam Long questionId
+    ) {
+        AuthPrincipal principal = AuthSupport.requireStudent(request);
+        ensureStudentInRoom(principal, roomCode);
+        return gameEngineService.swapQuestion(roomCode, principal.participantId(), questionId);
     }
 
     @PostMapping("/races/{roomCode}/path")
     public PathChoiceResponse choosePath(
+        HttpServletRequest request,
         @PathVariable String roomCode,
-        @RequestHeader("X-Participant-Id") Long participantId,
-        @Valid @RequestBody PathChoiceRequest request
+        @Valid @RequestBody PathChoiceRequest pathChoiceRequest
     ) {
-        return gameEngineService.choosePath(roomCode, participantId, request);
+        AuthPrincipal principal = AuthSupport.requireStudent(request);
+        ensureStudentInRoom(principal, roomCode);
+        return gameEngineService.choosePath(roomCode, principal.participantId(), pathChoiceRequest);
+    }
+
+    private void ensureStudentInRoom(AuthPrincipal principal, String roomCode) {
+        RaceRoom room = raceRoomService.getByRoomCodeOrThrow(roomCode);
+        if (principal.roomId() != null && !principal.roomId().equals(room.getId())) {
+            throw new ApiException("FORBIDDEN", "Student token does not match room");
+        }
+        RaceParticipant participant = raceRoomService.getRoomParticipants(roomCode).stream()
+            .filter(p -> p.getId().equals(principal.participantId()))
+            .findFirst()
+            .orElseThrow(() -> new ApiException("PARTICIPANT_NOT_IN_ROOM", "Participant not in room"));
+        if (!participant.getRaceRoom().getId().equals(room.getId())) {
+            throw new ApiException("PARTICIPANT_NOT_IN_ROOM", "Participant not in room");
+        }
     }
 }
