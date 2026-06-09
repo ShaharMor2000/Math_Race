@@ -88,7 +88,7 @@ public class RaceRoomService {
 
     @Transactional(readOnly = true)
     public RaceRoom getByRoomCodeOrThrow(String roomCode) {
-        return raceRoomRepository.findByRoomCode(roomCode.toUpperCase(Locale.ROOT))
+        return raceRoomRepository.findByRoomCode(roomCode.trim().toUpperCase(Locale.ROOT))
             .orElseThrow(() -> new ApiException("ROOM_NOT_FOUND", "Room not found"));
     }
 

@@ -18,14 +18,26 @@ async function request(path, options = {}) {
     }
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers
+    });
+  } catch {
+    throw new Error("Backend server is not running. Start the server on port 8080 and try again.");
+  }
 
   if (!response.ok) {
     const errBody = await response.text();
-    throw new Error(errBody || "API error");
+    let errorMessage = errBody || "API error";
+    try {
+      const parsed = JSON.parse(errBody);
+      errorMessage = parsed.message || parsed.details || errorMessage;
+    } catch {
+      // Keep the raw response text when the server did not return JSON.
+    }
+    throw new Error(errorMessage);
   }
 
   return response.json();

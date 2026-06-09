@@ -14,6 +14,7 @@ import { session } from "./services/session";
 
 function App() {
   const { roomCode: joinRoomCode } = useParams();
+  const [theme, setTheme] = useState(() => localStorage.getItem("mathRaceTheme") || "dark");
   const [role, setRole] = useState(joinRoomCode ? "student" : "teacher");
   const [teacherId, setTeacherId] = useState(session.getTeacherId());
   const [rooms, setRooms] = useState([]);
@@ -22,6 +23,7 @@ function App() {
   const [roomMeta, setRoomMeta] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [lastCreatedRoomCode, setLastCreatedRoomCode] = useState(null);
   const [teacherEventMessage, setTeacherEventMessage] = useState(null);
   const [teacherEventFeed, setTeacherEventFeed] = useState([]);
   const [teacherFinalRows, setTeacherFinalRows] = useState(null);
@@ -39,6 +41,15 @@ function App() {
   const [studentWinnerName, setStudentWinnerName] = useState(null);
   const [openRaces, setOpenRaces] = useState([]);
   const [answerFeedback, setAnswerFeedback] = useState(null);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("mathRaceTheme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
+  };
 
   const activeRoomForStream = role === "teacher" ? activeRoomCode : studentRoomCode;
   useRaceStream(
@@ -126,9 +137,12 @@ function App() {
   const handleCreateRace = async (payload) => {
     const room = await api.createRace(payload);
     setIsCreatingRace(false);
-    setActiveRoomCode(room.roomCode);
+    setActiveRoomCode(null);
+    setRoomMeta(null);
+    setParticipants([]);
+    setLeaderboard([]);
+    setLastCreatedRoomCode(room.roomCode);
     await refreshTeacherRooms();
-    await loadRoomDetails(room.roomCode);
   };
 
   const loadRoomDetails = async (roomCode) => {
@@ -354,6 +368,9 @@ function App() {
   if (isLoginScreen) {
     return (
       <main className="auth-app">
+        <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label="Toggle light and dark mode">
+          {theme === "dark" ? "Light" : "Dark"}
+        </button>
         <LoginPage
           activeRole={role}
           initialRoomCode={joinRoomCode || ""}
@@ -371,27 +388,43 @@ function App() {
 
   return (
     <main className="app-shell">
+      <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label="Toggle light and dark mode">
+        {theme === "dark" ? "Light" : "Dark"}
+      </button>
       <FloatingNumbersBackground />
       <div className="auth-symbol auth-symbol-one" aria-hidden="true">+</div>
       <div className="auth-symbol auth-symbol-two" aria-hidden="true">*</div>
       <div className="auth-symbol auth-symbol-three" aria-hidden="true">=</div>
 
       <div className="app">
-        <header className="card row between">
-        <h1>Math Race</h1>
-        <div className="row">
-          <button className={role === "teacher" ? "" : "ghost"} onClick={() => setRole("teacher")}>
-            מורה
-          </button>
-          <button className={role === "student" ? "" : "ghost"} onClick={() => setRole("student")}>
-            תלמיד
-          </button>
-          {teacherId ? (
-            <button className="ghost" onClick={logoutTeacher}>
-              התנתק
-            </button>
-          ) : null}
-        </div>
+        <header className="app-header">
+          <div className="app-header-brand">
+            <h1>Math Race</h1>
+            <p>Real-Time Mathematics Competition Platform</p>
+          </div>
+          <div className="app-header-actions" aria-label="Choose role">
+            <div className="app-role-tabs">
+              <button
+                type="button"
+                className={role === "teacher" ? "app-role-tab active" : "app-role-tab"}
+                onClick={() => setRole("teacher")}
+              >
+                Teacher
+              </button>
+              <button
+                type="button"
+                className={role === "student" ? "app-role-tab active" : "app-role-tab"}
+                onClick={() => setRole("student")}
+              >
+                Student
+              </button>
+            </div>
+            {teacherId ? (
+              <button type="button" className="app-logout-button" onClick={logoutTeacher}>
+                Log out
+              </button>
+            ) : null}
+          </div>
         </header>
 
       {role === "teacher" ? (
@@ -399,6 +432,7 @@ function App() {
           {teacherId && !isCreatingRace && !activeRoomCode && !teacherFinalRows ? (
             <TeacherDashboard
               rooms={rooms}
+              lastCreatedRoomCode={lastCreatedRoomCode}
               onCreateRace={() => setIsCreatingRace(true)}
               onOpenRoom={(roomCode) => void loadRoomDetails(roomCode)}
             />

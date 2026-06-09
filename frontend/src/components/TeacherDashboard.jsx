@@ -1,32 +1,75 @@
-import { DocNote } from "./DocNote";
+const statusLabels = {
+  DRAFT: "טיוטה",
+  LOBBY: "ממתין לתלמידים",
+  LOCKED: "החדר מלא",
+  RUNNING: "פעיל",
+  PAUSED: "מושהה",
+  FINISHED: "הסתיים",
+  CANCELLED: "בוטל"
+};
 
-export function TeacherDashboard({ rooms, onCreateRace, onOpenRoom }) {
+export function TeacherDashboard({ rooms, lastCreatedRoomCode, onCreateRace, onOpenRoom }) {
+  const activeRooms = rooms.filter((room) => ["LOBBY", "LOCKED", "RUNNING", "PAUSED"].includes(room.status)).length;
+  const totalParticipants = rooms.reduce((sum, room) => sum + Number(room.participants || 0), 0);
+
   return (
-    <section className="card">
-      <div className="row between">
-        <h2>דשבורד מורה</h2>
-        <button onClick={onCreateRace}>יצירת מרוץ חדש</button>
+    <section className="teacher-dashboard" dir="rtl">
+      <div className="teacher-dashboard-hero">
+        <div className="teacher-dashboard-copy">
+          <h2>דשבורד מורה</h2>
+          <p>
+            כאן אפשר ליצור מרוץ חדש, לפתוח חדר קיים, לאשר תלמידים ולעקוב אחרי ההתקדמות בזמן אמת.
+          </p>
+        </div>
+
+        <button type="button" className="dashboard-create-button" onClick={onCreateRace}>
+          <span className="create-button-icon" aria-hidden="true">
+            <span></span>
+          </span>
+          <span className="create-button-copy">
+            <strong>יצירת מרוץ חדש</strong>
+          </span>
+        </button>
       </div>
 
-      <DocNote
-        title="Teacher Dashboard"
-        text="This dashboard shows all teacher race rooms and statuses. Open any room to manage its lobby, start the race, and monitor live progress."
-      />
+      <div className="dashboard-stats" aria-label="סיכום פעילות">
+        <div className="dashboard-stat">
+          <span>חדרים</span>
+          <strong>{rooms.length}</strong>
+        </div>
+        <div className="dashboard-stat">
+          <span>חדרים פעילים</span>
+          <strong>{activeRooms}</strong>
+        </div>
+        <div className="dashboard-stat">
+          <span>משתתפים</span>
+          <strong>{totalParticipants}</strong>
+        </div>
+      </div>
 
-      <div className="stack">
-        {rooms.length === 0 ? (
-          <p>אין חדרים עדיין.</p>
-        ) : (
-          rooms.map((room) => (
-            <button key={room.roomCode} className="room-item" onClick={() => onOpenRoom(room.roomCode)}>
+      {rooms.length === 0 ? (
+        <div className="dashboard-empty">
+          <h3>עדיין אין מרוצים</h3>
+          <p>צרו מרוץ ראשון כדי לפתוח חדר לתלמידים ולהתחיל פעילות בכיתה.</p>
+        </div>
+      ) : (
+        <div className="dashboard-room-grid">
+          {rooms.map((room) => (
+            <button
+              key={room.roomCode}
+              className={room.roomCode === lastCreatedRoomCode ? "dashboard-room-card is-new" : "dashboard-room-card"}
+              onClick={() => onOpenRoom(room.roomCode)}
+            >
+              <span className="room-card-status">
+                {room.roomCode === lastCreatedRoomCode ? "חדש" : statusLabels[room.status] || room.status}
+              </span>
               <strong>{room.title}</strong>
-              <span>קוד: {room.roomCode}</span>
-              <span>סטטוס: {room.status}</span>
-              <span>משתתפים: {room.participants}</span>
+              <span className="room-card-code">קוד חדר: {room.roomCode}</span>
+              <span className="room-card-meta">משתתפים: {room.participants || 0}</span>
             </button>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

@@ -192,8 +192,8 @@ export function LoginPage({
       } else {
         await onTeacherLogin(email, password);
       }
-    } catch {
-      setError(teacherMode === "register" ? "Registration failed." : "Sign in failed. Check your username and password.");
+    } catch (err) {
+      setError(err.message || (teacherMode === "register" ? "Registration failed." : "Sign in failed. Check your username and password."));
     } finally {
       setLoading(false);
     }
@@ -204,9 +204,9 @@ export function LoginPage({
     setLoading(true);
     setError(null);
     try {
-      await onStudentJoin(selectedRoomCode, displayName.trim());
-    } catch {
-      setError("Could not join this room. Check the room code and try again.");
+      await onStudentJoin(selectedRoomCode.trim().toUpperCase(), displayName.trim());
+    } catch (err) {
+      setError(err.message || "Could not join this room. Check the room code and try again.");
     } finally {
       setLoading(false);
     }
@@ -217,9 +217,9 @@ export function LoginPage({
     setLoading(true);
     setError(null);
     try {
-      await onStudentJoin(roomCode.toUpperCase(), displayName.trim());
-    } catch {
-      setError("Could not join this room. Check the room code and try again.");
+      await onStudentJoin(roomCode.trim().toUpperCase(), displayName.trim());
+    } catch (err) {
+      setError(err.message || "Could not join this room. Check the room code and try again.");
     } finally {
       setLoading(false);
     }

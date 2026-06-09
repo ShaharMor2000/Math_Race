@@ -37,14 +37,15 @@ public class AuthService {
 
     @Transactional
     public Long registerTeacher(TeacherRegisterRequest request) {
-        teacherRepository.findByEmail(request.email().toLowerCase())
+        String username = normalizeUsername(request.email());
+        teacherRepository.findByEmail(username)
             .ifPresent(t -> {
-                throw new ApiException("EMAIL_EXISTS", "Email already exists");
+                throw new ApiException("USERNAME_EXISTS", "Username already exists");
             });
 
         Teacher teacher = new Teacher();
         teacher.setFullName(request.fullName());
-        teacher.setEmail(request.email().toLowerCase());
+        teacher.setEmail(username);
         teacher.setPasswordHash(passwordEncoder.encode(request.password()));
         teacherRepository.save(teacher);
         return teacher.getId();
@@ -52,11 +53,12 @@ public class AuthService {
 
     @Transactional
     public TeacherLoginResponse loginTeacher(TeacherLoginRequest request) {
-        Teacher teacher = teacherRepository.findByEmail(request.email().toLowerCase())
-            .orElseThrow(() -> new ApiException("INVALID_CREDENTIALS", "Invalid email or password"));
+        String username = normalizeUsername(request.email());
+        Teacher teacher = teacherRepository.findByEmail(username)
+            .orElseThrow(() -> new ApiException("INVALID_CREDENTIALS", "Invalid username or password"));
 
         if (!passwordEncoder.matches(request.password(), teacher.getPasswordHash())) {
-            throw new ApiException("INVALID_CREDENTIALS", "Invalid email or password");
+            throw new ApiException("INVALID_CREDENTIALS", "Invalid username or password");
         }
 
         teacher.setLastLoginAt(LocalDateTime.now());
@@ -126,5 +128,9 @@ public class AuthService {
         } catch (Exception ex) {
             throw new ApiException("GOOGLE_LOGIN_FAILED", "Google login failed");
         }
+    }
+
+    private String normalizeUsername(String username) {
+        return username.trim().toLowerCase(Locale.ROOT);
     }
 }
