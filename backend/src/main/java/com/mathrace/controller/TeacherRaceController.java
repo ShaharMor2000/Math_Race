@@ -19,12 +19,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -52,30 +54,55 @@ public class TeacherRaceController {
         return raceRoomService.listTeacherRooms(principal.teacherId());
     }
 
+    @PutMapping("/{roomCode}")
+    public Map<String, Object> updateRace(
+        HttpServletRequest request,
+        @PathVariable String roomCode,
+        @Valid @RequestBody CreateRaceRequest createRaceRequest
+    ) {
+        AuthPrincipal principal = AuthSupport.requireTeacher(request);
+        RaceRoom room = raceRoomService.updateRace(principal.teacherId(), roomCode, createRaceRequest);
+        return Map.of(
+            "roomId", room.getId(),
+            "roomCode", room.getRoomCode(),
+            "status", room.getStatus()
+        );
+    }
+
     @GetMapping("/{roomCode}")
     public Map<String, Object> roomDetails(HttpServletRequest request, @PathVariable String roomCode) {
         AuthPrincipal principal = AuthSupport.requireTeacher(request);
         RaceRoom room = raceRoomService.getByRoomCodeOrThrow(roomCode);
         raceRoomService.ensureTeacherOwnsRoom(principal.teacherId(), room);
         List<RaceParticipant> participants = raceRoomService.getRoomParticipants(roomCode);
-        List<Map<String, Object>> rows = participants.stream().map(p -> Map.<String, Object>of(
-            "participantId", p.getId(),
-            "studentId", p.getStudent().getId(),
-            "displayName", p.getStudent().getDisplayName(),
-            "laneNo", p.getLaneNo(),
-            "carColor", p.getCarColor(),
-            "participantStatus", p.getParticipantStatus().name(),
-            "progressPoints", p.getProgressPoints(),
-            "scoreTotal", p.getScoreTotal()
-        )).toList();
-        return Map.<String, Object>of(
-            "roomId", room.getId(),
-            "roomCode", room.getRoomCode(),
-            "status", room.getStatus(),
-            "startAt", room.getStartAt(),
-            "raceDurationMinutes", room.getRaceDurationMinutes(),
-            "participants", rows
-        );
+        List<Map<String, Object>> rows = participants.stream().map(p -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("participantId", p.getId());
+            row.put("studentId", p.getStudent().getId());
+            row.put("displayName", p.getStudent().getDisplayName());
+            row.put("email", p.getStudent().getEmail() == null ? "" : p.getStudent().getEmail());
+            row.put("laneNo", p.getLaneNo());
+            row.put("carColor", p.getCarColor());
+            row.put("participantStatus", p.getParticipantStatus().name());
+            row.put("progressPoints", p.getProgressPoints());
+            row.put("scoreTotal", p.getScoreTotal());
+            return row;
+        }).toList();
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("roomId", room.getId());
+        response.put("roomCode", room.getRoomCode());
+        response.put("title", room.getTitle());
+        response.put("className", room.getClassName());
+        response.put("status", room.getStatus());
+        response.put("maxParticipants", room.getMaxParticipants());
+        response.put("questionTimeMs", room.getQuestionTimeMs());
+        response.put("initialDifficulty", room.getInitialDifficulty());
+        response.put("enableLuckEvents", room.isEnableLuckEvents());
+        response.put("enablePathChoice", room.isEnablePathChoice());
+        response.put("startAt", room.getStartAt());
+        response.put("raceDurationMinutes", room.getRaceDurationMinutes());
+        response.put("participants", rows);
+        return response;
     }
 
     @PostMapping("/{roomCode}/students")

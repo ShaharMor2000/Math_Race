@@ -70,9 +70,17 @@ export const api = {
       body: JSON.stringify(payload)
     }),
 
+  updateRace: (roomCode, payload) =>
+    request(`/teacher/races/${roomCode}`, {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    }),
+
   listTeacherRaces: () => request("/teacher/races"),
 
   listOpenRaces: () => request("/student/races/open"),
+
+  listStudentRaces: (email) => request(`/student/races/mine?email=${encodeURIComponent(email)}`),
 
   roomDetails: (roomCode) => request(`/teacher/races/${roomCode}`),
 
@@ -112,10 +120,10 @@ export const api = {
       method: "POST"
     }),
 
-  joinRace: (roomCode, displayName) =>
+  joinRace: (roomCode, displayName, email) =>
     request("/student/join", {
       method: "POST",
-      body: JSON.stringify({ roomCode, displayName }),
+      body: JSON.stringify({ roomCode, displayName, email }),
       useTeacherAuth: false
     }),
 

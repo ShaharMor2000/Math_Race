@@ -8,6 +8,7 @@ import com.mathrace.dto.race.JoinRaceRequest;
 import com.mathrace.dto.race.JoinRaceResponse;
 import com.mathrace.dto.race.OpenRaceRoomResponse;
 import com.mathrace.dto.race.RoomSummaryResponse;
+import com.mathrace.dto.race.StudentRaceSummaryResponse;
 import com.mathrace.entity.RaceParticipant;
 import com.mathrace.entity.RaceResult;
 import com.mathrace.entity.RaceRoom;
@@ -81,6 +82,8 @@ public class RaceRoomService {
                 room.getTitle(),
                 room.getStatus(),
                 raceParticipantRepository.countByRaceRoom(room),
+                raceParticipantRepository.countByRaceRoomAndParticipantStatus(room, ParticipantStatus.PENDING),
+                raceParticipantRepository.countByRaceRoomAndParticipantStatus(room, ParticipantStatus.ACTIVE),
                 room.getCreatedAt()
             ))
             .toList();
@@ -113,6 +116,7 @@ public class RaceRoomService {
 
         Student student = new Student();
         student.setDisplayName(request.displayName());
+        student.setEmail(request.email());
         studentRepository.save(student);
 
         RaceParticipant participant = new RaceParticipant();
@@ -137,6 +141,40 @@ public class RaceRoomService {
             new JoinRaceResponse.ParticipantData(participant.getId(), participant.getLaneNo(), participant.getCarColor(), participant.getParticipantStatus()),
             new JoinRaceResponse.RoomData(room.getRoomCode(), room.getStatus())
         );
+    }
+
+    @Transactional
+    public RaceRoom updateRace(Long teacherId, String roomCode, CreateRaceRequest request) {
+        RaceRoom room = getByRoomCodeOrThrow(roomCode);
+        ensureTeacherOwnsRoom(teacherId, room);
+        if (room.getStatus() != RaceRoomStatus.LOBBY && room.getStatus() != RaceRoomStatus.LOCKED) {
+            throw new ApiException("ROOM_NOT_EDITABLE", "Race can be edited only before it starts");
+        }
+
+        long registered = countRegisteredParticipants(room);
+        if (request.maxParticipants() < registered) {
+            throw new ApiException("MAX_PARTICIPANTS_TOO_LOW", "Max participants cannot be lower than registered participants");
+        }
+
+        room.setTitle(request.title());
+        room.setClassName(request.className());
+        room.setMaxParticipants(request.maxParticipants());
+        room.setQuestionTimeMs(request.questionTimeMs());
+        room.setInitialDifficulty(request.initialDifficulty());
+        room.setEnableLuckEvents(request.enableLuckEvents());
+        room.setEnablePathChoice(request.enablePathChoice());
+        room.setRaceDurationMinutes(request.raceDurationMinutes());
+        raceRoomRepository.save(room);
+
+        if (room.getStatus() == RaceRoomStatus.LOCKED && registered < room.getMaxParticipants()) {
+            room.setStatus(RaceRoomStatus.LOBBY);
+            raceRoomRepository.save(room);
+        } else if (room.getStatus() == RaceRoomStatus.LOBBY && registered >= room.getMaxParticipants()) {
+            room.setStatus(RaceRoomStatus.LOCKED);
+            raceRoomRepository.save(room);
+        }
+
+        return room;
     }
 
     @Transactional
@@ -186,6 +224,35 @@ public class RaceRoomService {
                 );
             })
             .filter(r -> r.registeredCount() < r.maxParticipants())
+            .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<StudentRaceSummaryResponse> listStudentRacesByEmail(String email) {
+        String normalizedEmail = email == null ? "" : email.trim();
+        if (normalizedEmail.isBlank()) {
+            throw new ApiException("EMAIL_REQUIRED", "Student email is required");
+        }
+
+        return raceParticipantRepository.findStudentRaceSummaries(normalizedEmail).stream()
+            .map(participant -> {
+                RaceRoom room = participant.getRaceRoom();
+                return new StudentRaceSummaryResponse(
+                    room.getRoomCode(),
+                    room.getTitle(),
+                    room.getClassName(),
+                    room.getStatus(),
+                    participant.getParticipantStatus(),
+                    participant.getProgressPoints(),
+                    participant.getScoreTotal(),
+                    participant.getCorrectCount(),
+                    participant.getWrongCount(),
+                    participant.getAvgResponseMs(),
+                    participant.getCreatedAt(),
+                    room.getStartAt(),
+                    room.getFinishAt()
+                );
+            })
             .toList();
     }
 

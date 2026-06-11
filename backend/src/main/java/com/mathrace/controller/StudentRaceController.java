@@ -8,6 +8,7 @@ import com.mathrace.dto.race.PathChoiceResponse;
 import com.mathrace.dto.race.QuestionResponse;
 import com.mathrace.dto.race.SubmitAnswerRequest;
 import com.mathrace.dto.race.SubmitAnswerResponse;
+import com.mathrace.dto.race.StudentRaceSummaryResponse;
 import com.mathrace.entity.RaceParticipant;
 import com.mathrace.entity.RaceRoom;
 import com.mathrace.exception.ApiException;
@@ -40,6 +41,11 @@ public class StudentRaceController {
     @GetMapping("/races/open")
     public List<OpenRaceRoomResponse> listOpenRaces() {
         return raceRoomService.listOpenRaces();
+    }
+
+    @GetMapping("/races/mine")
+    public List<StudentRaceSummaryResponse> listMyRaces(@RequestParam String email) {
+        return raceRoomService.listStudentRacesByEmail(email);
     }
 
     @PostMapping("/join")

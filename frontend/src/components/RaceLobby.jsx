@@ -7,7 +7,9 @@ export function RaceLobby({
   onApproveParticipant,
   onRejectParticipant,
   onAddStudent,
-  onStartRace
+  onStartRace,
+  onBack,
+  onEditRace
 }) {
   const [newStudentName, setNewStudentName] = useState("");
   const pending = participants.filter((p) => p.participantStatus === "PENDING");
@@ -22,8 +24,20 @@ export function RaceLobby({
 
   return (
     <section className="card">
-      <h2>לובי מרוץ</h2>
-      <p className="room-code-large">קוד חדר: {roomCode}</p>
+      <div className="lobby-header">
+        <div>
+          <h2>לובי מרוץ</h2>
+          <p className="room-code-large">קוד חדר: {roomCode}</p>
+        </div>
+        <button type="button" className="ghost" onClick={onBack}>
+          חזרה לדשבורד
+        </button>
+      </div>
+      <div className="lobby-actions">
+        <button type="button" className="ghost" onClick={onEditRace}>
+          עריכת מרוץ
+        </button>
+      </div>
       {roomStatus === "LOCKED" ? <p className="locked-banner">החדר ננעל — הגיע למכסת המשתתפים</p> : null}
 
       <form onSubmit={addStudent} className="row add-student-form">
@@ -40,7 +54,10 @@ export function RaceLobby({
       <div className="stack">
         {pending.map((p) => (
           <div key={p.participantId} className="row between participant-row">
-            <span>{p.displayName}</span>
+            <span className="participant-identity">
+              <strong>{p.displayName}</strong>
+              <small>{p.email || "לא הוזן מייל"}</small>
+            </span>
             <span>מסלול {p.laneNo}</span>
             <span style={{ color: p.carColor }}>{p.carColor}</span>
             <div className="row">
@@ -60,7 +77,10 @@ export function RaceLobby({
       <div className="stack">
         {approved.map((p) => (
           <div key={p.participantId} className="row between participant-row">
-            <span>{p.displayName}</span>
+            <span className="participant-identity">
+              <strong>{p.displayName}</strong>
+              <small>{p.email || "לא הוזן מייל"}</small>
+            </span>
             <span>מסלול {p.laneNo}</span>
             <span style={{ color: p.carColor }}>{p.carColor}</span>
             <span className="status-pill">מאושר</span>
@@ -68,7 +88,7 @@ export function RaceLobby({
         ))}
       </div>
 
-      <button onClick={onStartRace} disabled={approved.length < 1}>
+      <button type="button" onClick={onStartRace} disabled={approved.length < 1}>
         התחל מרוץ
       </button>
     </section>

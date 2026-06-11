@@ -1,20 +1,21 @@
 import { useState } from "react";
 import { DocNote } from "./DocNote";
 
-export function StudentJoin({ openRaces = [], onJoin, onRefresh }) {
+export function StudentJoin({ openRaces = [], onJoin, onRefresh, onDashboardLogin }) {
   const [roomCode, setRoomCode] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
   const [submittingCode, setSubmittingCode] = useState(false);
   const [submittingRoomCode, setSubmittingRoomCode] = useState(null);
 
-  const canSubmit = displayName.trim().length > 0;
+  const canSubmit = displayName.trim().length > 0 && email.trim().length > 0;
 
   const submit = async (e) => {
     e.preventDefault();
     if (!canSubmit) return;
     setSubmittingCode(true);
     try {
-      await onJoin(roomCode.toUpperCase(), displayName.trim());
+      await onJoin(roomCode.toUpperCase(), displayName.trim(), email.trim());
     } finally {
       setSubmittingCode(false);
     }
@@ -24,10 +25,15 @@ export function StudentJoin({ openRaces = [], onJoin, onRefresh }) {
     if (!canSubmit) return;
     setSubmittingRoomCode(selectedRoomCode);
     try {
-      await onJoin(selectedRoomCode, displayName.trim());
+      await onJoin(selectedRoomCode, displayName.trim(), email.trim());
     } finally {
       setSubmittingRoomCode(null);
     }
+  };
+
+  const openDashboard = async () => {
+    if (!email.trim()) return;
+    await onDashboardLogin(email.trim());
   };
 
   return (
@@ -42,6 +48,13 @@ export function StudentJoin({ openRaces = [], onJoin, onRefresh }) {
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
           placeholder="שם תלמיד"
+          required
+        />
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="מייל תלמיד"
           required
         />
         <div className="row between">
@@ -81,6 +94,9 @@ export function StudentJoin({ openRaces = [], onJoin, onRefresh }) {
         />
         <button type="submit" disabled={!canSubmit || submittingCode}>
           {submittingCode ? "נרשם..." : "הצטרף למרוץ"}
+        </button>
+        <button type="button" className="ghost" disabled={!email.trim()} onClick={() => void openDashboard()}>
+          כניסה לדשבורד שלי
         </button>
       </form>
     </section>

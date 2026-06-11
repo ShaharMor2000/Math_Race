@@ -104,6 +104,15 @@ cd backend
 
 If Maven is installed globally, you can use `mvn spring-boot:run` instead.
 
+For a lightweight local database without MySQL, run the backend with the `h2` profile:
+
+```powershell
+cd backend
+.\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=h2
+```
+
+The H2 profile stores data in `backend/data/math_race`, so teacher accounts and race rooms remain after restarting the server.
+
 ### 3) Frontend
 
 ```bash

@@ -13,17 +13,18 @@ const steps = [
   { id: 4, title: "מכניקות משחק" }
 ];
 
-export function CreateRace({ onSubmit, onCancel }) {
+export function CreateRace({ mode = "create", initialValues = {}, onSubmit, onCancel }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [stepError, setStepError] = useState("");
-  const [title, setTitle] = useState("");
-  const [className, setClassName] = useState("");
-  const [maxParticipants, setMaxParticipants] = useState(null);
-  const [questionTimeMs, setQuestionTimeMs] = useState(null);
-  const [initialDifficulty, setInitialDifficulty] = useState("");
-  const [enableLuckEvents, setEnableLuckEvents] = useState(true);
-  const [enablePathChoice, setEnablePathChoice] = useState(true);
-  const [raceDurationMinutes, setRaceDurationMinutes] = useState(null);
+  const [title, setTitle] = useState(initialValues.title || "");
+  const [className, setClassName] = useState(initialValues.className || "");
+  const [maxParticipants, setMaxParticipants] = useState(initialValues.maxParticipants ?? null);
+  const [questionTimeMs, setQuestionTimeMs] = useState(initialValues.questionTimeMs ?? null);
+  const [initialDifficulty, setInitialDifficulty] = useState(initialValues.initialDifficulty || "");
+  const [enableLuckEvents, setEnableLuckEvents] = useState(initialValues.enableLuckEvents ?? true);
+  const [enablePathChoice, setEnablePathChoice] = useState(initialValues.enablePathChoice ?? true);
+  const [raceDurationMinutes, setRaceDurationMinutes] = useState(initialValues.raceDurationMinutes ?? null);
+  const isEditMode = mode === "edit";
 
   const questionTimeSeconds = questionTimeMs === null ? null : Math.round(questionTimeMs / 1000);
   const isLastStep = currentStep === steps.length;
@@ -114,8 +115,8 @@ export function CreateRace({ onSubmit, onCancel }) {
     <section className="create-race" dir="rtl">
       <div className="create-race-hero">
         <div className="create-race-title">
-          <h2>יצירת מרוץ חדש</h2>
-          <p>עברו שלב-שלב, הגדירו את המרוץ, ובסוף פתחו חדר לתלמידים.</p>
+          <h2>{isEditMode ? "עריכת מרוץ" : "יצירת מרוץ חדש"}</h2>
+          <p>{isEditMode ? "עדכנו את הגדרות המרוץ וחזרו ללובי כדי לאשר תלמידים." : "עברו שלב-שלב, הגדירו את המרוץ, ובסוף פתחו חדר לתלמידים."}</p>
         </div>
       </div>
 
@@ -312,7 +313,7 @@ export function CreateRace({ onSubmit, onCancel }) {
             {currentStep === 1 ? "ביטול" : "חזרה"}
           </button>
           <button type="submit" className="create-submit">
-            {isLastStep ? "צור חדר" : "המשך"}
+            {isLastStep ? (isEditMode ? "שמור שינויים" : "צור חדר") : "המשך"}
           </button>
         </div>
       </form>

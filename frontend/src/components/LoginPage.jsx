@@ -98,6 +98,7 @@ export function LoginPage({
   onTeacherRegister,
   onGoogleLogin,
   onStudentJoin,
+  onStudentDashboardLogin,
   onRefreshOpenRaces
 }) {
   const [teacherMode, setTeacherMode] = useState("login");
@@ -200,11 +201,11 @@ export function LoginPage({
   };
 
   const joinOpenRace = async (selectedRoomCode) => {
-    if (!displayName.trim()) return;
+    if (!displayName.trim() || !email.trim()) return;
     setLoading(true);
     setError(null);
     try {
-      await onStudentJoin(selectedRoomCode.trim().toUpperCase(), displayName.trim());
+      await onStudentJoin(selectedRoomCode.trim().toUpperCase(), displayName.trim(), email.trim());
     } catch (err) {
       setError(err.message || "Could not join this room. Check the room code and try again.");
     } finally {
@@ -217,9 +218,22 @@ export function LoginPage({
     setLoading(true);
     setError(null);
     try {
-      await onStudentJoin(roomCode.trim().toUpperCase(), displayName.trim());
+      await onStudentJoin(roomCode.trim().toUpperCase(), displayName.trim(), email.trim());
     } catch (err) {
       setError(err.message || "Could not join this room. Check the room code and try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openStudentDashboard = async () => {
+    if (!email.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await onStudentDashboardLogin(email.trim());
+    } catch (err) {
+      setError(err.message || "Could not open student dashboard.");
     } finally {
       setLoading(false);
     }
@@ -375,7 +389,7 @@ export function LoginPage({
                       {race.roomCode} | {race.registeredCount}/{race.maxParticipants}
                     </p>
                   </div>
-                  <button type="button" disabled={loading || !displayName.trim()} onClick={() => void joinOpenRace(race.roomCode)}>
+                  <button type="button" disabled={loading || !displayName.trim() || !email.trim()} onClick={() => void joinOpenRace(race.roomCode)}>
                     Join
                   </button>
                 </div>
@@ -395,6 +409,20 @@ export function LoginPage({
               </div>
             </label>
             <label>
+              <span>Student Email</span>
+              <div className="auth-input-wrap">
+                <span className="auth-input-icon" aria-hidden="true"><MiniIcon type="user" /></span>
+                <input
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="Enter student email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                />
+              </div>
+            </label>
+            <label>
               <span>Room Code</span>
               <div className="auth-input-wrap">
                 <span className="auth-input-icon" aria-hidden="true"><MiniIcon type="room" /></span>
@@ -407,8 +435,11 @@ export function LoginPage({
                 />
               </div>
             </label>
-            <button className="auth-submit" disabled={loading || !displayName.trim()}>
+            <button className="auth-submit" disabled={loading || !displayName.trim() || !email.trim()}>
               {loading ? "Joining..." : "Join Race"}
+            </button>
+            <button className="auth-google-button" type="button" disabled={loading || !email.trim()} onClick={() => void openStudentDashboard()}>
+              Open My Dashboard
             </button>
             <div className="auth-separator">
               <span>OR</span>

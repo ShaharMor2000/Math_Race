@@ -5,6 +5,7 @@ import { FinalResults } from "./components/FinalResults";
 import { LiveRaceDashboard } from "./components/LiveRaceDashboard";
 import { FloatingNumbersBackground, LoginPage } from "./components/LoginPage";
 import { RaceLobby } from "./components/RaceLobby";
+import { StudentDashboard } from "./components/StudentDashboard";
 import { StudentJoin } from "./components/StudentJoin";
 import { StudentRaceScreen } from "./components/StudentRaceScreen";
 import { TeacherDashboard } from "./components/TeacherDashboard";
@@ -19,6 +20,7 @@ function App() {
   const [teacherId, setTeacherId] = useState(session.getTeacherId());
   const [rooms, setRooms] = useState([]);
   const [isCreatingRace, setIsCreatingRace] = useState(false);
+  const [isEditingRace, setIsEditingRace] = useState(false);
   const [activeRoomCode, setActiveRoomCode] = useState(null);
   const [roomMeta, setRoomMeta] = useState(null);
   const [participants, setParticipants] = useState([]);
@@ -28,8 +30,11 @@ function App() {
   const [teacherEventFeed, setTeacherEventFeed] = useState([]);
   const [teacherFinalRows, setTeacherFinalRows] = useState(null);
   const [teacherWinnerName, setTeacherWinnerName] = useState(null);
+  const [teacherError, setTeacherError] = useState("");
+  const [openingRoomCode, setOpeningRoomCode] = useState(null);
 
   const [studentRoomCode, setStudentRoomCode] = useState(session.getStudentRoomCode());
+  const [studentEmail, setStudentEmail] = useState(session.getStudentEmail());
   const [studentParticipantId, setStudentParticipantId] = useState(session.getStudentParticipantId());
   const [studentParticipantStatus, setStudentParticipantStatus] = useState(session.getStudentStatus());
   const [studentProgress, setStudentProgress] = useState(0);
@@ -41,6 +46,10 @@ function App() {
   const [studentWinnerName, setStudentWinnerName] = useState(null);
   const [openRaces, setOpenRaces] = useState([]);
   const [answerFeedback, setAnswerFeedback] = useState(null);
+  const [studentRaces, setStudentRaces] = useState([]);
+  const [studentDashboardLoading, setStudentDashboardLoading] = useState(false);
+  const [studentDashboardError, setStudentDashboardError] = useState("");
+  const [studentView, setStudentView] = useState("dashboard");
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -66,12 +75,17 @@ function App() {
   useEffect(() => {
     if (!teacherId) return;
     void refreshTeacherRooms();
-  }, [teacherId]);
+  }, [teacherId, role]);
 
   useEffect(() => {
     if (role !== "student" || studentRoomCode) return;
     void refreshOpenRaces();
   }, [role, studentRoomCode]);
+
+  useEffect(() => {
+    if (role !== "student" || !studentEmail) return;
+    void refreshStudentDashboard(studentEmail);
+  }, [role, studentEmail]);
 
   const pushTeacherEvent = useCallback((type, message) => {
     if (!message) return;
@@ -108,8 +122,13 @@ function App() {
   }, [studentRoomCode, studentParticipantId, studentParticipantStatus, studentQuestion, studentFinalRows, fetchNextQuestion]);
 
   const refreshTeacherRooms = async () => {
-    const list = await api.listTeacherRaces();
-    setRooms(list);
+    try {
+      const list = await api.listTeacherRaces();
+      setRooms(list);
+      setTeacherError("");
+    } catch (error) {
+      setTeacherError(error.message || "לא ניתן לטעון את רשימת המרוצים.");
+    }
   };
 
   const handleTeacherLogin = async (email, password) => {
@@ -134,9 +153,32 @@ function App() {
     setOpenRaces(races);
   };
 
+  const refreshStudentDashboard = async (email = studentEmail) => {
+    if (!email) return;
+    setStudentDashboardLoading(true);
+    setStudentDashboardError("");
+    try {
+      const races = await api.listStudentRaces(email);
+      setStudentRaces(races);
+    } catch (error) {
+      setStudentDashboardError(error.message || "לא ניתן לטעון את דשבורד התלמיד.");
+    } finally {
+      setStudentDashboardLoading(false);
+    }
+  };
+
+  const handleStudentDashboardLogin = async (email) => {
+    const normalizedEmail = email.trim();
+    session.saveStudentEmail(normalizedEmail);
+    setStudentEmail(normalizedEmail);
+    setStudentView("dashboard");
+    await refreshStudentDashboard(normalizedEmail);
+  };
+
   const handleCreateRace = async (payload) => {
     const room = await api.createRace(payload);
     setIsCreatingRace(false);
+    setIsEditingRace(false);
     setActiveRoomCode(null);
     setRoomMeta(null);
     setParticipants([]);
@@ -145,11 +187,49 @@ function App() {
     await refreshTeacherRooms();
   };
 
+  const handleUpdateRace = async (payload) => {
+    if (!activeRoomCode) return;
+    await api.updateRace(activeRoomCode, payload);
+    setIsEditingRace(false);
+    await loadRoomDetails(activeRoomCode);
+    await refreshTeacherRooms();
+  };
+
   const loadRoomDetails = async (roomCode) => {
     const detail = await api.roomDetails(roomCode);
+    setIsCreatingRace(false);
+    setIsEditingRace(false);
+    setTeacherFinalRows(null);
+    setTeacherWinnerName(null);
     setActiveRoomCode(roomCode);
     setRoomMeta(detail);
     setParticipants(detail.participants);
+    setTeacherEventFeed([]);
+    setTeacherEventMessage(null);
+
+    if (detail.status === "RUNNING" || detail.status === "PAUSED") {
+      const board = await api.leaderboard(roomCode);
+      setLeaderboard(board);
+    } else if (detail.status === "FINISHED") {
+      const results = await api.finalResults(roomCode);
+      setTeacherFinalRows(results.leaderboard);
+      setTeacherWinnerName(results.winnerName);
+      setLeaderboard([]);
+    } else {
+      setLeaderboard([]);
+    }
+  };
+
+  const openTeacherRoom = async (roomCode) => {
+    setTeacherError("");
+    setOpeningRoomCode(roomCode);
+    try {
+      await loadRoomDetails(roomCode);
+    } catch (error) {
+      setTeacherError(error.message || "לא ניתן לפתוח את המרוץ לניהול.");
+    } finally {
+      setOpeningRoomCode(null);
+    }
   };
 
   const startRace = async () => {
@@ -181,17 +261,21 @@ function App() {
     setTeacherWinnerName(results.winnerName);
   };
 
-  const handleStudentJoin = async (roomCode, displayName) => {
-    const res = await api.joinRace(roomCode, displayName);
+  const handleStudentJoin = async (roomCode, displayName, email) => {
+    const res = await api.joinRace(roomCode, displayName, email);
     session.saveStudent(
       res.studentToken,
       res.participant.participantId,
       res.room.roomCode,
-      res.participant.participantStatus
+      res.participant.participantStatus,
+      email
     );
+    setStudentEmail(email);
     setStudentRoomCode(res.room.roomCode);
     setStudentParticipantId(res.participant.participantId);
     setStudentParticipantStatus(res.participant.participantStatus);
+    setStudentView("dashboard");
+    await refreshStudentDashboard(email);
     setStudentEventMessage(
       res.participant.participantStatus === "PENDING" ? "נרשמת בהצלחה. ממתין לאישור מורה..." : null
     );
@@ -268,10 +352,16 @@ function App() {
     setParticipants([]);
     setLeaderboard([]);
     setTeacherEventFeed([]);
+    setTeacherEventMessage(null);
+    setTeacherError("");
+    setOpeningRoomCode(null);
+    setIsCreatingRace(false);
+    setIsEditingRace(false);
   };
 
   const resetStudentFlow = () => {
     session.clearStudent();
+    setStudentEmail(null);
     setStudentFinalRows(null);
     setStudentWinnerName(null);
     setStudentRoomCode(null);
@@ -282,6 +372,9 @@ function App() {
     setStudentScore(0);
     setPendingPathDecision(false);
     setStudentEventMessage(null);
+    setStudentRaces([]);
+    setStudentDashboardError("");
+    setStudentView("dashboard");
     void refreshOpenRaces();
   };
 
@@ -326,7 +419,8 @@ function App() {
       }
       if (studentParticipantId && Number(payload.participantId) === studentParticipantId) {
         setStudentParticipantStatus("ACTIVE");
-        session.saveStudent(session.getStudentToken(), studentParticipantId, studentRoomCode, "ACTIVE");
+        session.saveStudent(session.getStudentToken(), studentParticipantId, studentRoomCode, "ACTIVE", studentEmail);
+        void refreshStudentDashboard(studentEmail);
         setStudentEventMessage("אושרת למרוץ. המתן להתחלה.");
       }
     }
@@ -363,7 +457,7 @@ function App() {
   };
 
   const isLoginScreen =
-    (role === "teacher" && !teacherId) || (role === "student" && !studentRoomCode);
+    (role === "teacher" && !teacherId) || (role === "student" && !studentEmail && !studentRoomCode);
 
   if (isLoginScreen) {
     return (
@@ -380,6 +474,7 @@ function App() {
           onTeacherRegister={handleTeacherRegister}
           onGoogleLogin={handleTeacherGoogleLogin}
           onStudentJoin={handleStudentJoin}
+          onStudentDashboardLogin={handleStudentDashboardLogin}
           onRefreshOpenRaces={refreshOpenRaces}
         />
       </main>
@@ -429,12 +524,14 @@ function App() {
 
       {role === "teacher" ? (
         <>
-          {teacherId && !isCreatingRace && !activeRoomCode && !teacherFinalRows ? (
+          {teacherId && !isCreatingRace && !isEditingRace && !activeRoomCode && !teacherFinalRows ? (
             <TeacherDashboard
               rooms={rooms}
               lastCreatedRoomCode={lastCreatedRoomCode}
+              openingRoomCode={openingRoomCode}
+              errorMessage={teacherError}
               onCreateRace={() => setIsCreatingRace(true)}
-              onOpenRoom={(roomCode) => void loadRoomDetails(roomCode)}
+              onOpenRoom={(roomCode) => void openTeacherRoom(roomCode)}
             />
           ) : null}
 
@@ -442,7 +539,16 @@ function App() {
             <CreateRace onSubmit={handleCreateRace} onCancel={() => setIsCreatingRace(false)} />
           ) : null}
 
-          {teacherId && activeRoomCode && !leaderboard.length && !teacherFinalRows ? (
+          {teacherId && isEditingRace && roomMeta ? (
+            <CreateRace
+              mode="edit"
+              initialValues={roomMeta}
+              onSubmit={handleUpdateRace}
+              onCancel={() => setIsEditingRace(false)}
+            />
+          ) : null}
+
+          {teacherId && activeRoomCode && !isEditingRace && !leaderboard.length && !teacherFinalRows ? (
             <RaceLobby
               roomCode={activeRoomCode}
               roomStatus={roomMeta?.status}
@@ -451,6 +557,8 @@ function App() {
               onRejectParticipant={rejectParticipant}
               onAddStudent={addStudent}
               onStartRace={startRace}
+              onBack={resetTeacherFlow}
+              onEditRace={() => setIsEditingRace(true)}
             />
           ) : null}
 
@@ -476,17 +584,46 @@ function App() {
         </>
       ) : (
         <>
-          {!studentRoomCode ? (
-            <StudentJoin openRaces={openRaces} onJoin={handleStudentJoin} onRefresh={refreshOpenRaces} />
+          {!studentRoomCode && studentView === "join" ? (
+            <StudentJoin
+              openRaces={openRaces}
+              onJoin={handleStudentJoin}
+              onRefresh={refreshOpenRaces}
+              onDashboardLogin={handleStudentDashboardLogin}
+            />
           ) : null}
-          {studentRoomCode && studentParticipantStatus === "PENDING" && !studentFinalRows ? (
+          {studentEmail && studentView === "dashboard" ? (
+            <StudentDashboard
+              email={studentEmail}
+              races={studentRaces}
+              loading={studentDashboardLoading}
+              errorMessage={studentDashboardError}
+              activeRoomCode={studentRoomCode}
+              activeParticipantStatus={studentParticipantStatus}
+              onRefresh={() => void refreshStudentDashboard()}
+              onEnterRace={() => setStudentView("race")}
+              onFindRace={() => {
+                const email = studentEmail;
+                session.clearStudent();
+                if (email) session.saveStudentEmail(email);
+                setStudentRoomCode(null);
+                setStudentParticipantId(null);
+                setStudentParticipantStatus(null);
+                setStudentQuestion(null);
+                setStudentView("join");
+                void refreshOpenRaces();
+              }}
+              onLogout={resetStudentFlow}
+            />
+          ) : null}
+          {studentRoomCode && studentView === "race" && studentParticipantStatus === "PENDING" && !studentFinalRows ? (
             <section className="card centered">
               <h3>ממתין לאישור מורה</h3>
               <p>קוד חדר: {studentRoomCode}</p>
               <p>{studentEventMessage || "נרשמת בהצלחה. המתן לאישור."}</p>
             </section>
           ) : null}
-          {studentRoomCode && studentParticipantStatus === "ACTIVE" && !studentFinalRows ? (
+          {studentRoomCode && studentView === "race" && studentParticipantStatus === "ACTIVE" && !studentFinalRows ? (
             <StudentRaceScreen
               roomCode={studentRoomCode}
               progress={studentProgress}

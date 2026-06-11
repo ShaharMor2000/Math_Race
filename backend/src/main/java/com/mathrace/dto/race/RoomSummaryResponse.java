@@ -10,6 +10,8 @@ public record RoomSummaryResponse(
     String title,
     RaceRoomStatus status,
     long participants,
+    long pendingParticipants,
+    long approvedParticipants,
     LocalDateTime createdAt
 ) {
 }

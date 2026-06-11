@@ -8,9 +8,10 @@ const statusLabels = {
   CANCELLED: "בוטל"
 };
 
-export function TeacherDashboard({ rooms, lastCreatedRoomCode, onCreateRace, onOpenRoom }) {
+export function TeacherDashboard({ rooms, lastCreatedRoomCode, openingRoomCode, errorMessage, onCreateRace, onOpenRoom }) {
   const activeRooms = rooms.filter((room) => ["LOBBY", "LOCKED", "RUNNING", "PAUSED"].includes(room.status)).length;
   const totalParticipants = rooms.reduce((sum, room) => sum + Number(room.participants || 0), 0);
+  const pendingParticipants = rooms.reduce((sum, room) => sum + Number(room.pendingParticipants || 0), 0);
 
   return (
     <section className="teacher-dashboard" dir="rtl">
@@ -45,7 +46,13 @@ export function TeacherDashboard({ rooms, lastCreatedRoomCode, onCreateRace, onO
           <span>משתתפים</span>
           <strong>{totalParticipants}</strong>
         </div>
+        <div className="dashboard-stat">
+          <span>ממתינים לאישור</span>
+          <strong>{pendingParticipants}</strong>
+        </div>
       </div>
+
+      {errorMessage ? <p className="dashboard-error">{errorMessage}</p> : null}
 
       {rooms.length === 0 ? (
         <div className="dashboard-empty">
@@ -55,18 +62,32 @@ export function TeacherDashboard({ rooms, lastCreatedRoomCode, onCreateRace, onO
       ) : (
         <div className="dashboard-room-grid">
           {rooms.map((room) => (
-            <button
+            <article
               key={room.roomCode}
               className={room.roomCode === lastCreatedRoomCode ? "dashboard-room-card is-new" : "dashboard-room-card"}
-              onClick={() => onOpenRoom(room.roomCode)}
             >
               <span className="room-card-status">
-                {room.roomCode === lastCreatedRoomCode ? "חדש" : statusLabels[room.status] || room.status}
+                {Number(room.pendingParticipants || 0) > 0
+                  ? `${room.pendingParticipants} ממתינים לאישור`
+                  : room.roomCode === lastCreatedRoomCode
+                    ? "חדש"
+                    : statusLabels[room.status] || room.status}
               </span>
               <strong>{room.title}</strong>
               <span className="room-card-code">קוד חדר: {room.roomCode}</span>
-              <span className="room-card-meta">משתתפים: {room.participants || 0}</span>
-            </button>
+              <span className="room-card-meta">
+                משתתפים: {room.participants || 0}
+                {Number(room.approvedParticipants || 0) > 0 ? ` | מאושרים: ${room.approvedParticipants}` : ""}
+              </span>
+              <button
+                type="button"
+                className="room-card-action"
+                onClick={() => onOpenRoom(room.roomCode)}
+                disabled={openingRoomCode === room.roomCode}
+              >
+                {openingRoomCode === room.roomCode ? "פותח..." : "ניהול מרוץ"}
+              </button>
+            </article>
           ))}
         </div>
       )}

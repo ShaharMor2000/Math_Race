@@ -22,6 +22,9 @@ public class Student extends BaseEntity {
     @Column(nullable = false, length = 80)
     private String displayName;
 
+    @Column(length = 190)
+    private String email;
+
     @Column(length = 120)
     private String externalRef;
 }
