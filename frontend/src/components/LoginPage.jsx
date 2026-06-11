@@ -102,6 +102,7 @@ export function LoginPage({
   onRefreshOpenRaces
 }) {
   const [teacherMode, setTeacherMode] = useState("login");
+  const [studentMode, setStudentMode] = useState("login");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -218,9 +219,13 @@ export function LoginPage({
     setLoading(true);
     setError(null);
     try {
-      await onStudentJoin(roomCode.trim().toUpperCase(), displayName.trim(), email.trim());
+      if (studentMode === "login") {
+        await onStudentDashboardLogin(email.trim());
+      } else {
+        await onStudentJoin(roomCode.trim().toUpperCase(), displayName.trim(), email.trim());
+      }
     } catch (err) {
-      setError(err.message || "Could not join this room. Check the room code and try again.");
+      setError(err.message || (studentMode === "login" ? "Could not open student dashboard." : "Could not join this room. Check the room code and try again."));
     } finally {
       setLoading(false);
     }
@@ -373,41 +378,23 @@ export function LoginPage({
           </form>
         ) : (
           <form onSubmit={submitStudent} className="auth-form">
-            <div className="open-races-login">
-              <div className="row between">
-                <strong>Open Races</strong>
-                <button type="button" className="ghost" onClick={onRefreshOpenRaces}>
-                  Refresh
-                </button>
-              </div>
-              {openRaces.length === 0 ? <p className="muted">No open races right now.</p> : null}
-              {openRaces.map((race) => (
-                <div key={race.roomCode} className="open-race-row compact">
-                  <div>
-                    <strong>{race.title}</strong>
-                    <p className="muted">
-                      {race.roomCode} | {race.registeredCount}/{race.maxParticipants}
-                    </p>
-                  </div>
-                  <button type="button" disabled={loading || !displayName.trim() || !email.trim()} onClick={() => void joinOpenRace(race.roomCode)}>
-                    Join
-                  </button>
-                </div>
-              ))}
+            <div className="auth-tabs inner-tabs">
+              <button
+                type="button"
+                className={studentMode === "register" ? "auth-tab active" : "auth-tab"}
+                onClick={() => setStudentMode("register")}
+              >
+                Register
+              </button>
+              <button
+                type="button"
+                className={studentMode === "login" ? "auth-tab active" : "auth-tab"}
+                onClick={() => setStudentMode("login")}
+              >
+                Login
+              </button>
             </div>
-            <label>
-              <span>Student Name</span>
-              <div className="auth-input-wrap">
-                <span className="auth-input-icon" aria-hidden="true"><MiniIcon type="user" /></span>
-                <input
-                  value={displayName}
-                  onChange={(event) => setDisplayName(event.target.value)}
-                  placeholder="Enter student name"
-                  autoComplete="name"
-                  required
-                />
-              </div>
-            </label>
+
             <label>
               <span>Student Email</span>
               <div className="auth-input-wrap">
@@ -422,24 +409,65 @@ export function LoginPage({
                 />
               </div>
             </label>
-            <label>
-              <span>Room Code</span>
-              <div className="auth-input-wrap">
-                <span className="auth-input-icon" aria-hidden="true"><MiniIcon type="room" /></span>
-                <input
-                  value={roomCode}
-                  onChange={(event) => setRoomCode(event.target.value)}
-                  placeholder="Enter room code"
-                  autoCapitalize="characters"
-                  required
-                />
-              </div>
-            </label>
-            <button className="auth-submit" disabled={loading || !displayName.trim() || !email.trim()}>
-              {loading ? "Joining..." : "Join Race"}
-            </button>
-            <button className="auth-google-button" type="button" disabled={loading || !email.trim()} onClick={() => void openStudentDashboard()}>
-              Open My Dashboard
+
+            {studentMode === "register" ? (
+              <>
+                <label>
+                  <span>Student Name</span>
+                  <div className="auth-input-wrap">
+                    <span className="auth-input-icon" aria-hidden="true"><MiniIcon type="user" /></span>
+                    <input
+                      value={displayName}
+                      onChange={(event) => setDisplayName(event.target.value)}
+                      placeholder="Enter student name"
+                      autoComplete="name"
+                      required
+                    />
+                  </div>
+                </label>
+                <label>
+                  <span>Room Code</span>
+                  <div className="auth-input-wrap">
+                    <span className="auth-input-icon" aria-hidden="true"><MiniIcon type="room" /></span>
+                    <input
+                      value={roomCode}
+                      onChange={(event) => setRoomCode(event.target.value)}
+                      placeholder="Enter room code"
+                      autoCapitalize="characters"
+                      required
+                    />
+                  </div>
+                </label>
+                <div className="open-races-login">
+                  <div className="row between">
+                    <strong>Open Races</strong>
+                    <button type="button" className="ghost" onClick={onRefreshOpenRaces}>
+                      Refresh
+                    </button>
+                  </div>
+                  {openRaces.length === 0 ? <p className="muted">No open races right now.</p> : null}
+                  {openRaces.map((race) => (
+                    <div key={race.roomCode} className="open-race-row compact">
+                      <div>
+                        <strong>{race.title}</strong>
+                        <p className="muted">
+                          {race.roomCode} | {race.registeredCount}/{race.maxParticipants}
+                        </p>
+                      </div>
+                      <button type="button" disabled={loading || !displayName.trim() || !email.trim()} onClick={() => void joinOpenRace(race.roomCode)}>
+                        Join
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : null}
+
+            <button
+              className="auth-submit"
+              disabled={loading || !email.trim() || (studentMode === "register" && (!displayName.trim() || !roomCode.trim()))}
+            >
+              {loading ? "Please wait..." : studentMode === "login" ? "Login" : "Join Race"}
             </button>
             <div className="auth-separator">
               <span>OR</span>

@@ -336,6 +336,28 @@ body {
   gap: 18px;
 }
 
+.student-login-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(119, 255, 144, 0.18);
+  border-radius: 14px;
+  background: rgba(119, 255, 144, 0.08);
+}
+
+.student-login-panel > strong {
+  color: #ffffff;
+  font-size: 17px;
+}
+
+.student-login-panel p {
+  margin: 0;
+  color: #d4d4d8;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .auth-form label {
   display: flex;
   flex-direction: column;
@@ -2034,8 +2056,18 @@ button.ghost {
 :root[data-theme="light"] .student-dashboard-head p,
 :root[data-theme="light"] .student-current-race p,
 :root[data-theme="light"] .student-race-card p,
+:root[data-theme="light"] .student-login-panel p,
 :root[data-theme="light"] .student-report-grid {
   color: #426075;
+}
+
+:root[data-theme="light"] .student-login-panel {
+  border-color: rgba(32, 160, 120, 0.18);
+  background: rgba(232, 255, 243, 0.66);
+}
+
+:root[data-theme="light"] .student-login-panel > strong {
+  color: #102033;
 }
 
 :root[data-theme="light"] .student-race-card {
