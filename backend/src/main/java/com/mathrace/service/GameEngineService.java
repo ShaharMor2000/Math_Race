@@ -114,7 +114,7 @@ public class GameEngineService {
         finalizeRace(room, null);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public QuestionResponse nextQuestion(String roomCode, Long participantId) {
         RaceRoom room = raceRoomService.getByRoomCodeOrThrow(roomCode);
         RaceParticipant participant = getParticipantOrThrow(participantId);

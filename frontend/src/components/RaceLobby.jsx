@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Badge, Button, Card, Input, PageHeader } from "./ui/Primitives";
 
 export function RaceLobby({
   roomCode,
@@ -23,74 +24,97 @@ export function RaceLobby({
   };
 
   return (
-    <section className="card">
-      <div className="lobby-header">
-        <div>
-          <h2>לובי מרוץ</h2>
-          <p className="room-code-large">קוד חדר: {roomCode}</p>
-        </div>
-        <button type="button" className="ghost" onClick={onBack}>
-          חזרה לדשבורד
-        </button>
-      </div>
-      <div className="lobby-actions">
-        <button type="button" className="ghost" onClick={onEditRace}>
-          עריכת מרוץ
-        </button>
-      </div>
-      {roomStatus === "LOCKED" ? <p className="locked-banner">החדר ננעל — הגיע למכסת המשתתפים</p> : null}
+    <section className="lobby-screen">
+      <PageHeader
+        kicker="ניהול מרוץ"
+        title="לובי מרוץ"
+        subtitle="אשרו תלמידים, הוסיפו משתתפים והתחילו כשהכיתה מוכנה."
+        badge={<Badge variant={roomStatus === "LOCKED" ? "warning" : "success"}>{roomStatus === "LOCKED" ? "החדר מלא" : "פתוח להרשמה"}</Badge>}
+        actions={
+          <>
+            <Button variant="ghost" size="sm" onClick={onBack}>חזרה</Button>
+            <Button variant="ghost" size="sm" onClick={onEditRace}>עריכה</Button>
+            <Button onClick={onStartRace} disabled={approved.length < 1}>התחל מרוץ</Button>
+          </>
+        }
+      />
 
-      <form onSubmit={addStudent} className="row add-student-form">
-        <input
-          value={newStudentName}
-          onChange={(e) => setNewStudentName(e.target.value)}
-          placeholder="הוסף תלמיד לרוסטר"
-        />
-        <button type="submit">הוסף</button>
-      </form>
+      <Card className="lobby-room-card">
+        <p className="page-kicker">קוד חדר</p>
+        <p className="room-code-display">{roomCode}</p>
+        <p className="muted">שתפו את הקוד או לינק ההצטרפות עם התלמידים</p>
+      </Card>
 
-      <h3>ממתינים לאישור ({pending.length})</h3>
-      {pending.length === 0 ? <p>אין תלמידים ממתינים כרגע.</p> : null}
-      <div className="stack">
-        {pending.map((p) => (
-          <div key={p.participantId} className="row between participant-row">
-            <span className="participant-identity">
-              <strong>{p.displayName}</strong>
-              <small>{p.email || "לא הוזן מייל"}</small>
-            </span>
-            <span>מסלול {p.laneNo}</span>
-            <span style={{ color: p.carColor }}>{p.carColor}</span>
-            <div className="row">
-              <button type="button" onClick={() => void onApproveParticipant(p.participantId)}>
-                אשר
-              </button>
-              <button type="button" className="ghost" onClick={() => void onRejectParticipant(p.participantId)}>
-                דחה
-              </button>
-            </div>
+      {roomStatus === "LOCKED" ? (
+        <div className="banner banner-warning">החדר ננעל — הגיע למכסת המשתתפים</div>
+      ) : null}
+
+      <Card className="lobby-add-form">
+        <h3>הוספת תלמיד לרוסטר</h3>
+        <form onSubmit={addStudent} className="lobby-add-row">
+          <Input
+            value={newStudentName}
+            onChange={(e) => setNewStudentName(e.target.value)}
+            placeholder="שם תלמיד"
+          />
+          <Button type="submit">הוסף</Button>
+        </form>
+      </Card>
+
+      <div className="lobby-columns">
+        <Card className="lobby-panel">
+          <div className="lobby-panel-head">
+            <h3>ממתינים לאישור</h3>
+            <Badge variant="warning">{pending.length}</Badge>
           </div>
-        ))}
-      </div>
-
-      <h3>מאושרים למרוץ ({approved.length})</h3>
-      {approved.length === 0 ? <p>עדיין אין תלמידים מאושרים.</p> : null}
-      <div className="stack">
-        {approved.map((p) => (
-          <div key={p.participantId} className="row between participant-row">
-            <span className="participant-identity">
-              <strong>{p.displayName}</strong>
-              <small>{p.email || "לא הוזן מייל"}</small>
-            </span>
-            <span>מסלול {p.laneNo}</span>
-            <span style={{ color: p.carColor }}>{p.carColor}</span>
-            <span className="status-pill">מאושר</span>
+          {pending.length === 0 ? <p className="muted">אין תלמידים ממתינים כרגע.</p> : null}
+          <div className="participant-list">
+            {pending.map((p) => (
+              <article key={p.participantId} className="participant-item">
+                <div className="participant-main">
+                  <span className="participant-avatar" style={{ background: p.carColor }} aria-hidden="true">🚗</span>
+                  <div className="participant-identity">
+                    <strong>{p.displayName}</strong>
+                    <small>{p.email || "לא הוזן מייל"}</small>
+                  </div>
+                </div>
+                <div className="participant-meta">
+                  <span className="muted">מסלול {p.laneNo}</span>
+                  <div className="participant-actions">
+                    <Button size="sm" onClick={() => void onApproveParticipant(p.participantId)}>אשר</Button>
+                    <Button variant="ghost" size="sm" onClick={() => void onRejectParticipant(p.participantId)}>דחה</Button>
+                  </div>
+                </div>
+              </article>
+            ))}
           </div>
-        ))}
-      </div>
+        </Card>
 
-      <button type="button" onClick={onStartRace} disabled={approved.length < 1}>
-        התחל מרוץ
-      </button>
+        <Card className="lobby-panel">
+          <div className="lobby-panel-head">
+            <h3>מאושרים למרוץ</h3>
+            <Badge variant="success">{approved.length}</Badge>
+          </div>
+          {approved.length === 0 ? <p className="muted">עדיין אין תלמידים מאושרים.</p> : null}
+          <div className="participant-list">
+            {approved.map((p) => (
+              <article key={p.participantId} className="participant-item">
+                <div className="participant-main">
+                  <span className="participant-avatar" style={{ background: p.carColor }} aria-hidden="true">🏎️</span>
+                  <div className="participant-identity">
+                    <strong>{p.displayName}</strong>
+                    <small>{p.email || "לא הוזן מייל"}</small>
+                  </div>
+                </div>
+                <div className="participant-meta">
+                  <span className="muted">מסלול {p.laneNo}</span>
+                  <Badge variant="success">מאושר</Badge>
+                </div>
+              </article>
+            ))}
+          </div>
+        </Card>
+      </div>
     </section>
   );
 }

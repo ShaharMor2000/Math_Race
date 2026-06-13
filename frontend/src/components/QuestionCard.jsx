@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Badge, Button, Card } from "./ui/Primitives";
 
 export function QuestionCard({ question, onAnswer, onSwap, feedback }) {
   const [remainingMs, setRemainingMs] = useState(question.maxTimeMs);
   const [submitting, setSubmitting] = useState(false);
   const startedAt = useMemo(() => Date.now(), [question.questionId]);
   const timedOutRef = useRef(false);
+  const timerPct = Math.max(0, Math.min(100, (remainingMs / question.maxTimeMs) * 100));
 
   useEffect(() => {
     setRemainingMs(question.maxTimeMs);
@@ -29,28 +31,47 @@ export function QuestionCard({ question, onAnswer, onSwap, feedback }) {
     setSubmitting(false);
   };
 
-  const timerClass = remainingMs < 3000 ? "timer danger" : "timer";
+  const timerDanger = remainingMs < 3000;
 
   return (
-    <section className={`card question-card ${feedback || ""}`}>
-      <div className="row between">
-        <h3>שאלה</h3>
-        <span className={timerClass}>{Math.ceil(remainingMs / 1000)} שניות</span>
+    <Card className={`question-card-premium ${feedback || ""}`}>
+      <div className="question-card-top">
+        <div>
+          <p className="page-kicker">שאלה חדשה</p>
+          <Badge variant="default">{question.difficulty || "MEDIUM"}</Badge>
+        </div>
+        <div className={`question-timer ${timerDanger ? "danger" : ""}`} aria-live="polite">
+          <div className="question-timer-ring" style={{ background: `conic-gradient(var(--color-accent) ${timerPct}%, rgba(255,255,255,0.08) 0)` }} />
+          <strong>{Math.ceil(remainingMs / 1000)}</strong>
+          <span>שניות</span>
+        </div>
       </div>
-      {question.hintActive ? <p className="hint-banner">רמז פעיל — פחות אפשרויות תשובה</p> : null}
-      <p className="question-text">{question.questionText}</p>
-      <div className={question.options.length <= 2 ? "grid-2" : "grid-2"}>
+
+      {question.hintActive ? (
+        <div className="banner banner-info">רמז פעיל — פחות אפשרויות תשובה</div>
+      ) : null}
+
+      <p className="question-text-premium">{question.questionText}</p>
+
+      <div className="question-options">
         {question.options.map((option) => (
-          <button key={option} onClick={() => void submit(option)} disabled={submitting || remainingMs === 0}>
+          <Button
+            key={option}
+            variant="secondary"
+            className="question-option-btn"
+            disabled={submitting || remainingMs === 0}
+            onClick={() => void submit(option)}
+          >
             {option}
-          </button>
+          </Button>
         ))}
       </div>
+
       {question.swapAvailable ? (
-        <button className="ghost swap-btn" type="button" disabled={submitting} onClick={() => void onSwap?.()}>
+        <Button variant="ghost" className="swap-btn" disabled={submitting} onClick={() => void onSwap?.()}>
           החלף שאלה
-        </button>
+        </Button>
       ) : null}
-    </section>
+    </Card>
   );
 }

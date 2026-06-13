@@ -9,6 +9,8 @@ import { StudentDashboard } from "./components/StudentDashboard";
 import { StudentJoin } from "./components/StudentJoin";
 import { StudentRaceScreen } from "./components/StudentRaceScreen";
 import { TeacherDashboard } from "./components/TeacherDashboard";
+import { Toast } from "./components/Toast";
+import { AppChrome, Button } from "./components/ui/Primitives";
 import { useRaceStream } from "./hooks/useRaceStream";
 import { api } from "./services/api";
 import { session } from "./services/session";
@@ -50,6 +52,25 @@ function App() {
   const [studentDashboardLoading, setStudentDashboardLoading] = useState(false);
   const [studentDashboardError, setStudentDashboardError] = useState("");
   const [studentView, setStudentView] = useState("dashboard");
+  const [studentRacePaused, setStudentRacePaused] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = useCallback((message, type = "error") => {
+    if (!message) return;
+    setToast({ message, type });
+    window.setTimeout(() => setToast(null), 4500);
+  }, []);
+
+  const runAction = useCallback(async (action, successMessage) => {
+    try {
+      const result = await action();
+      if (successMessage) showToast(successMessage, "success");
+      return result;
+    } catch (error) {
+      showToast(error.message || "אירעה שגיאה");
+      throw error;
+    }
+  }, [showToast]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -78,14 +99,25 @@ function App() {
   }, [teacherId, role]);
 
   useEffect(() => {
-    if (role !== "student" || studentRoomCode) return;
-    void refreshOpenRaces();
-  }, [role, studentRoomCode]);
+    if (role !== "student" || !studentEmail || studentRoomCode) return;
+    void refreshOpenRaces().catch((error) => showToast(error.message));
+  }, [role, studentEmail, studentRoomCode, showToast]);
 
   useEffect(() => {
     if (role !== "student" || !studentEmail) return;
     void refreshStudentDashboard(studentEmail);
   }, [role, studentEmail]);
+
+  useEffect(() => {
+    if (role !== "student" || !studentRoomCode || studentParticipantStatus !== "ACTIVE") return;
+    const activeRace = studentRaces.find(
+      (race) => race.roomCode === studentRoomCode && (race.roomStatus === "RUNNING" || race.roomStatus === "PAUSED")
+    );
+    if (activeRace) {
+      setStudentView("race");
+      setStudentRacePaused(activeRace.roomStatus === "PAUSED");
+    }
+  }, [role, studentRoomCode, studentParticipantStatus, studentRaces]);
 
   const pushTeacherEvent = useCallback((type, message) => {
     if (!message) return;
@@ -176,7 +208,7 @@ function App() {
   };
 
   const handleCreateRace = async (payload) => {
-    const room = await api.createRace(payload);
+    const room = await runAction(() => api.createRace(payload), "המרוץ נוצר בהצלחה");
     setIsCreatingRace(false);
     setIsEditingRace(false);
     setActiveRoomCode(null);
@@ -189,7 +221,7 @@ function App() {
 
   const handleUpdateRace = async (payload) => {
     if (!activeRoomCode) return;
-    await api.updateRace(activeRoomCode, payload);
+    await runAction(() => api.updateRace(activeRoomCode, payload), "המרוץ עודכן");
     setIsEditingRace(false);
     await loadRoomDetails(activeRoomCode);
     await refreshTeacherRooms();
@@ -234,35 +266,43 @@ function App() {
 
   const startRace = async () => {
     if (!activeRoomCode) return;
-    await api.startRace(activeRoomCode);
-    const board = await api.leaderboard(activeRoomCode);
-    setLeaderboard(board);
-    setParticipants((prev) => prev.filter((p) => p.participantStatus === "ACTIVE"));
-    await loadRoomDetails(activeRoomCode);
+    await runAction(async () => {
+      await api.startRace(activeRoomCode);
+      const board = await api.leaderboard(activeRoomCode);
+      setLeaderboard(board);
+      setParticipants((prev) => prev.filter((p) => p.participantStatus === "ACTIVE"));
+      await loadRoomDetails(activeRoomCode);
+    }, "המרוץ התחיל!");
   };
 
   const pauseRace = async () => {
     if (!activeRoomCode) return;
-    await api.pauseRace(activeRoomCode);
-    await loadRoomDetails(activeRoomCode);
+    await runAction(async () => {
+      await api.pauseRace(activeRoomCode);
+      await loadRoomDetails(activeRoomCode);
+    }, "המרוץ הושהה");
   };
 
   const resumeRace = async () => {
     if (!activeRoomCode) return;
-    await api.resumeRace(activeRoomCode);
-    await loadRoomDetails(activeRoomCode);
+    await runAction(async () => {
+      await api.resumeRace(activeRoomCode);
+      await loadRoomDetails(activeRoomCode);
+    }, "המרוץ חודש");
   };
 
   const endRace = async () => {
     if (!activeRoomCode) return;
-    await api.endRace(activeRoomCode);
-    const results = await api.finalResults(activeRoomCode);
-    setTeacherFinalRows(results.leaderboard);
-    setTeacherWinnerName(results.winnerName);
+    await runAction(async () => {
+      await api.endRace(activeRoomCode);
+      const results = await api.finalResults(activeRoomCode);
+      setTeacherFinalRows(results.leaderboard);
+      setTeacherWinnerName(results.winnerName);
+    }, "המרוץ הסתיים");
   };
 
   const handleStudentJoin = async (roomCode, displayName, email) => {
-    const res = await api.joinRace(roomCode, displayName, email);
+    const res = await runAction(() => api.joinRace(roomCode, displayName, email), "נרשמת בהצלחה");
     session.saveStudent(
       res.studentToken,
       res.participant.participantId,
@@ -274,68 +314,90 @@ function App() {
     setStudentRoomCode(res.room.roomCode);
     setStudentParticipantId(res.participant.participantId);
     setStudentParticipantStatus(res.participant.participantStatus);
-    setStudentView("dashboard");
     await refreshStudentDashboard(email);
+
+    const isActiveInRunningRace =
+      res.room.status === "RUNNING" && res.participant.participantStatus === "ACTIVE";
+    setStudentView(isActiveInRunningRace ? "race" : "dashboard");
+    setStudentRacePaused(res.room.status === "PAUSED");
     setStudentEventMessage(
       res.participant.participantStatus === "PENDING" ? "נרשמת בהצלחה. ממתין לאישור מורה..." : null
     );
-    if (res.room.status === "RUNNING" && res.participant.participantStatus === "ACTIVE") {
+    if (isActiveInRunningRace) {
       await fetchNextQuestion(res.room.roomCode);
     }
   };
 
   const approveParticipant = async (participantId) => {
     if (!activeRoomCode) return;
-    await api.approveParticipant(activeRoomCode, participantId);
-    await loadRoomDetails(activeRoomCode);
+    await runAction(async () => {
+      await api.approveParticipant(activeRoomCode, participantId);
+      await loadRoomDetails(activeRoomCode);
+    }, "התלמיד אושר");
   };
 
   const rejectParticipant = async (participantId) => {
     if (!activeRoomCode) return;
-    await api.rejectParticipant(activeRoomCode, participantId);
-    await loadRoomDetails(activeRoomCode);
+    await runAction(async () => {
+      await api.rejectParticipant(activeRoomCode, participantId);
+      await loadRoomDetails(activeRoomCode);
+    }, "ההרשמה נדחתה");
   };
 
   const addStudent = async (displayName) => {
     if (!activeRoomCode) return;
-    await api.addStudent(activeRoomCode, displayName);
-    await loadRoomDetails(activeRoomCode);
+    await runAction(async () => {
+      await api.addStudent(activeRoomCode, displayName);
+      await loadRoomDetails(activeRoomCode);
+    }, "התלמיד נוסף");
   };
 
   const answerQuestion = async (answer, responseTimeMs) => {
-    if (!studentRoomCode || !studentParticipantId || !studentQuestion) return;
-    const res = await api.submitAnswer(studentRoomCode, {
-      questionId: studentQuestion.questionId,
-      submittedAnswer: answer,
-      responseTimeMs
-    });
-    setStudentProgress(res.newProgress);
-    setStudentScore(res.newScore);
-    setStudentEventMessage(res.triggeredEvent?.message || null);
-    setAnswerFeedback(res.correct ? "correct-flash" : "wrong-flash");
-    window.setTimeout(() => setAnswerFeedback(null), 500);
+    if (!studentRoomCode || !studentParticipantId || !studentQuestion || studentRacePaused) return;
+    try {
+      const res = await api.submitAnswer(studentRoomCode, {
+        questionId: studentQuestion.questionId,
+        submittedAnswer: answer,
+        responseTimeMs
+      });
+      setStudentProgress(res.newProgress);
+      setStudentScore(res.newScore);
+      setStudentEventMessage(res.triggeredEvent?.message || null);
+      setAnswerFeedback(res.correct ? "correct-flash" : "wrong-flash");
+      window.setTimeout(() => setAnswerFeedback(null), 500);
 
-    const hasPathDecision = res.triggeredEvent?.type === "PATH_DECISION";
-    setPendingPathDecision(hasPathDecision);
-    if (!hasPathDecision) {
-      await fetchNextQuestion(studentRoomCode);
-    } else {
-      setStudentQuestion(null);
+      const hasPathDecision = res.triggeredEvent?.type === "PATH_DECISION";
+      setPendingPathDecision(hasPathDecision);
+      if (!hasPathDecision) {
+        await fetchNextQuestion(studentRoomCode);
+      } else {
+        setStudentQuestion(null);
+      }
+    } catch (error) {
+      showToast(error.message || "שליחת התשובה נכשלה");
     }
   };
 
   const swapQuestion = async () => {
     if (!studentRoomCode || !studentQuestion) return;
-    const q = await api.swapQuestion(studentRoomCode, studentQuestion.questionId);
-    setStudentQuestion(q);
-    setStudentEventMessage("השאלה הוחלפה");
+    try {
+      const q = await api.swapQuestion(studentRoomCode, studentQuestion.questionId);
+      setStudentQuestion(q);
+      setStudentEventMessage("השאלה הוחלפה");
+    } catch (error) {
+      showToast(error.message || "החלפת השאלה נכשלה");
+    }
   };
 
   const choosePath = async (choice) => {
     if (!studentRoomCode || !studentParticipantId) return;
-    await api.choosePath(studentRoomCode, choice);
-    setPendingPathDecision(false);
-    await fetchNextQuestion(studentRoomCode);
+    try {
+      await api.choosePath(studentRoomCode, choice);
+      setPendingPathDecision(false);
+      await fetchNextQuestion(studentRoomCode);
+    } catch (error) {
+      showToast(error.message || "בחירת המסלול נכשלה");
+    }
   };
 
   const logoutTeacher = () => {
@@ -375,8 +437,23 @@ function App() {
     setStudentRaces([]);
     setStudentDashboardError("");
     setStudentView("dashboard");
+    setStudentRacePaused(false);
     void refreshOpenRaces();
   };
+
+  const teacherRoomStatus = roomMeta?.status;
+  const showTeacherLobby =
+    teacherId &&
+    activeRoomCode &&
+    !isEditingRace &&
+    !teacherFinalRows &&
+    (teacherRoomStatus === "LOBBY" || teacherRoomStatus === "LOCKED");
+  const showTeacherLive =
+    teacherId &&
+    activeRoomCode &&
+    !isEditingRace &&
+    !teacherFinalRows &&
+    (teacherRoomStatus === "RUNNING" || teacherRoomStatus === "PAUSED");
 
   const handleStreamEvent = (event) => {
     const payload = event.payload || {};
@@ -421,7 +498,8 @@ function App() {
         setStudentParticipantStatus("ACTIVE");
         session.saveStudent(session.getStudentToken(), studentParticipantId, studentRoomCode, "ACTIVE", studentEmail);
         void refreshStudentDashboard(studentEmail);
-        setStudentEventMessage("אושרת למרוץ. המתן להתחלה.");
+        setStudentEventMessage("אושרת למרוץ!");
+        setStudentView("race");
       }
     }
     if (event.type === "registration_rejected") {
@@ -436,11 +514,23 @@ function App() {
     if (event.type === "race_started") {
       if (role === "teacher") pushTeacherEvent("race_started", "המרוץ התחיל!");
       if (studentRoomCode && studentParticipantId && studentParticipantStatus === "ACTIVE") {
+        setStudentRacePaused(false);
+        setStudentView("race");
         void fetchNextQuestion(studentRoomCode);
       }
     }
-    if (event.type === "race_paused" || event.type === "race_resumed") {
+    if (event.type === "race_paused") {
       if (activeRoomCode) void loadRoomDetails(activeRoomCode);
+      if (role === "student") setStudentRacePaused(true);
+    }
+    if (event.type === "race_resumed") {
+      if (activeRoomCode) void loadRoomDetails(activeRoomCode);
+      if (role === "student") {
+        setStudentRacePaused(false);
+        if (studentRoomCode && studentParticipantId && studentParticipantStatus === "ACTIVE") {
+          void fetchNextQuestion(studentRoomCode);
+        }
+      }
     }
     if (event.type === "race_finished") {
       const roomCode = event.roomCode;
@@ -462,8 +552,8 @@ function App() {
   if (isLoginScreen) {
     return (
       <main className="auth-app">
-        <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label="Toggle light and dark mode">
-          {theme === "dark" ? "Light" : "Dark"}
+        <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label="החלפת מצב תצוגה">
+          {theme === "dark" ? "☀️ בהיר" : "🌙 כהה"}
         </button>
         <LoginPage
           activeRole={role}
@@ -482,45 +572,49 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
-      <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label="Toggle light and dark mode">
-        {theme === "dark" ? "Light" : "Dark"}
-      </button>
+    <main className="app-shell" dir="rtl">
+      <Toast message={toast?.message} type={toast?.type} onClose={() => setToast(null)} />
       <FloatingNumbersBackground />
-      <div className="auth-symbol auth-symbol-one" aria-hidden="true">+</div>
-      <div className="auth-symbol auth-symbol-two" aria-hidden="true">*</div>
-      <div className="auth-symbol auth-symbol-three" aria-hidden="true">=</div>
 
       <div className="app">
-        <header className="app-header">
-          <div className="app-header-brand">
-            <h1>Math Race</h1>
-            <p>Real-Time Mathematics Competition Platform</p>
-          </div>
-          <div className="app-header-actions" aria-label="Choose role">
-            <div className="app-role-tabs">
-              <button
-                type="button"
-                className={role === "teacher" ? "app-role-tab active" : "app-role-tab"}
-                onClick={() => setRole("teacher")}
-              >
-                Teacher
-              </button>
-              <button
-                type="button"
-                className={role === "student" ? "app-role-tab active" : "app-role-tab"}
-                onClick={() => setRole("student")}
-              >
-                Student
-              </button>
-            </div>
-            {teacherId ? (
-              <button type="button" className="app-logout-button" onClick={logoutTeacher}>
-                Log out
-              </button>
-            ) : null}
-          </div>
-        </header>
+        <AppChrome
+          brand="מרוץ חשבון"
+          subtitle="תחרות מתמטיקה בזמן אמת לכיתה"
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          actions={
+            <>
+              {!teacherId && !studentEmail ? (
+                <div className="app-role-tabs">
+                  <button
+                    type="button"
+                    className={role === "teacher" ? "app-role-tab active" : "app-role-tab"}
+                    onClick={() => setRole("teacher")}
+                  >
+                    מורה
+                  </button>
+                  <button
+                    type="button"
+                    className={role === "student" ? "app-role-tab active" : "app-role-tab"}
+                    onClick={() => setRole("student")}
+                  >
+                    תלמיד
+                  </button>
+                </div>
+              ) : null}
+              {teacherId ? (
+                <Button variant="ghost" size="sm" onClick={logoutTeacher}>
+                  יציאה
+                </Button>
+              ) : null}
+              {studentEmail && !teacherId ? (
+                <Button variant="ghost" size="sm" onClick={resetStudentFlow}>
+                  יציאה
+                </Button>
+              ) : null}
+            </>
+          }
+        />
 
       {role === "teacher" ? (
         <>
@@ -548,7 +642,7 @@ function App() {
             />
           ) : null}
 
-          {teacherId && activeRoomCode && !isEditingRace && !leaderboard.length && !teacherFinalRows ? (
+          {showTeacherLobby ? (
             <RaceLobby
               roomCode={activeRoomCode}
               roomStatus={roomMeta?.status}
@@ -562,7 +656,7 @@ function App() {
             />
           ) : null}
 
-          {teacherId && activeRoomCode && leaderboard.length > 0 && !teacherFinalRows ? (
+          {showTeacherLive ? (
             <LiveRaceDashboard
               roomCode={activeRoomCode}
               roomStatus={roomMeta?.status}
@@ -575,6 +669,7 @@ function App() {
               onEndRace={endRace}
               onPauseRace={pauseRace}
               onResumeRace={resumeRace}
+              onBack={resetTeacherFlow}
             />
           ) : null}
 
@@ -601,7 +696,10 @@ function App() {
               activeRoomCode={studentRoomCode}
               activeParticipantStatus={studentParticipantStatus}
               onRefresh={() => void refreshStudentDashboard()}
-              onEnterRace={() => setStudentView("race")}
+              onEnterRace={() => {
+                setStudentView("race");
+                setStudentRacePaused(false);
+              }}
               onFindRace={() => {
                 const email = studentEmail;
                 session.clearStudent();
@@ -617,10 +715,11 @@ function App() {
             />
           ) : null}
           {studentRoomCode && studentView === "race" && studentParticipantStatus === "PENDING" && !studentFinalRows ? (
-            <section className="card centered">
+            <section className="surface-card centered waiting-card premium-waiting">
+              <div className="waiting-icon" aria-hidden="true">⏳</div>
               <h3>ממתין לאישור מורה</h3>
-              <p>קוד חדר: {studentRoomCode}</p>
-              <p>{studentEventMessage || "נרשמת בהצלחה. המתן לאישור."}</p>
+              <p className="room-code-display">{studentRoomCode}</p>
+              <p className="muted">{studentEventMessage || "נרשמת בהצלחה. המתן לאישור."}</p>
             </section>
           ) : null}
           {studentRoomCode && studentView === "race" && studentParticipantStatus === "ACTIVE" && !studentFinalRows ? (
@@ -632,6 +731,7 @@ function App() {
               eventMessage={studentEventMessage}
               pendingPathDecision={pendingPathDecision}
               answerFeedback={answerFeedback}
+              racePaused={studentRacePaused}
               onAnswer={answerQuestion}
               onChoosePath={choosePath}
               onSwapQuestion={swapQuestion}

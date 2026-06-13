@@ -1,3 +1,4 @@
+import { Badge, Card } from "./ui/Primitives";
 import { QuestionCard } from "./QuestionCard";
 
 export function StudentRaceScreen({
@@ -8,45 +9,75 @@ export function StudentRaceScreen({
   eventMessage,
   pendingPathDecision,
   answerFeedback,
+  racePaused,
   onAnswer,
   onChoosePath,
   onSwapQuestion
 }) {
-  return (
-    <section className="stack">
-      <div className="card">
-        <h2>מרוץ תלמיד - {roomCode}</h2>
-        <p>התקדמות: {progress}/1000</p>
-        <p>ניקוד: {score}</p>
-        <div className="progress-bar">
-          <div className="progress-fill" style={{ width: `${(progress / 1000) * 100}%` }} />
-        </div>
-      </div>
+  const pct = Math.max(0, Math.min(100, (progress / 1000) * 100));
 
-      {pendingPathDecision ? (
-        <div className="card path-choice">
-          <h3>צומת — בחר מסלול</h3>
-          <div className="row">
-            <button className="highway-btn" onClick={() => void onChoosePath("HIGHWAY")}>
-              אוטוסטרדה (סיכון/תגמול גבוה)
-            </button>
-            <button className="dirt-btn" onClick={() => void onChoosePath("DIRT_ROAD")}>
-              דרך עפר (יציב ובטוח)
-            </button>
+  return (
+    <section className="stack student-race-screen">
+      <Card className="student-race-hero">
+        <div className="student-race-top">
+          <div>
+            <Badge variant="live">מרוץ פעיל</Badge>
+            <h2>חדר {roomCode}</h2>
+          </div>
+          <div className="student-race-stats">
+            <div>
+              <span className="muted">התקדמות</span>
+              <strong>{progress}/1000</strong>
+            </div>
+            <div>
+              <span className="muted">ניקוד</span>
+              <strong>{score}</strong>
+            </div>
           </div>
         </div>
+        <div className="student-progress-track">
+          <div className="student-progress-fill" style={{ width: `${pct}%` }} />
+          <span className="student-progress-car" style={{ insetInlineStart: `${pct}%` }}>🏎️</span>
+        </div>
+      </Card>
+
+      {racePaused ? (
+        <div className="banner banner-warning student-paused">המרוץ הושהה על ידי המורה. המתן להמשך...</div>
       ) : null}
 
-      {question ? (
+      {pendingPathDecision ? (
+        <Card className="path-choice premium-path-choice">
+          <h3>צומת — בחר מסלול</h3>
+          <p className="muted">אוטוסטרדה = סיכון גבוה ותגמול גדול. דרך עפר = יציב ואיטי יותר.</p>
+          <div className="path-choice-grid">
+            <button type="button" className="highway-btn" onClick={() => void onChoosePath("HIGHWAY")}>
+              <strong>אוטוסטרדה</strong>
+              <span>שאלה קשה · בונוס ענק</span>
+            </button>
+            <button type="button" className="dirt-btn" onClick={() => void onChoosePath("DIRT_ROAD")}>
+              <strong>דרך עפר</strong>
+              <span>3 שאלות קלות · התקדמות בטוחה</span>
+            </button>
+          </div>
+        </Card>
+      ) : null}
+
+      {!racePaused && question ? (
         <QuestionCard
           question={question}
           onAnswer={onAnswer}
           onSwap={onSwapQuestion}
           feedback={answerFeedback}
         />
-      ) : (
-        <div className="card">ממתין לשאלה...</div>
-      )}
+      ) : null}
+
+      {!racePaused && !question && !pendingPathDecision ? (
+        <Card className="waiting-card premium-waiting">
+          <div className="waiting-icon" aria-hidden="true">🧮</div>
+          <p>ממתין לשאלה הבאה...</p>
+        </Card>
+      ) : null}
+
       {eventMessage ? <div className="event-toast">{eventMessage}</div> : null}
     </section>
   );

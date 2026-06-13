@@ -7,6 +7,7 @@ import com.mathrace.dto.race.FinalResultsResponse;
 import com.mathrace.dto.race.JoinRaceRequest;
 import com.mathrace.dto.race.JoinRaceResponse;
 import com.mathrace.dto.race.OpenRaceRoomResponse;
+import com.mathrace.dto.race.RoomDetailsResponse;
 import com.mathrace.dto.race.RoomSummaryResponse;
 import com.mathrace.dto.race.StudentRaceSummaryResponse;
 import com.mathrace.entity.RaceParticipant;
@@ -283,6 +284,9 @@ public class RaceRoomService {
         RaceRoom room = getByRoomCodeOrThrow(roomCode);
         ensureTeacherOwnsRoom(teacherId, room);
         RaceParticipant participant = getParticipantInRoomOrThrow(room, participantId);
+        if (participant.getParticipantStatus() != ParticipantStatus.PENDING) {
+            throw new ApiException("PARTICIPANT_NOT_PENDING", "Only pending registrations can be rejected");
+        }
         String displayName = participant.getStudent().getDisplayName();
         raceParticipantRepository.delete(participant);
         unlockRoomIfNeeded(room);
@@ -313,6 +317,42 @@ public class RaceRoomService {
         room.setStatus(RaceRoomStatus.FINISHED);
         room.setFinishAt(LocalDateTime.now());
         return room;
+    }
+
+    @Transactional(readOnly = true)
+    public RoomDetailsResponse getRoomDetails(Long teacherId, String roomCode) {
+        RaceRoom room = getByRoomCodeOrThrow(roomCode);
+        ensureTeacherOwnsRoom(teacherId, room);
+        List<RoomDetailsResponse.ParticipantRow> rows = raceParticipantRepository
+            .findByRaceRoomOrderByProgressPointsDesc(room)
+            .stream()
+            .map(p -> new RoomDetailsResponse.ParticipantRow(
+                p.getId(),
+                p.getStudent().getId(),
+                p.getStudent().getDisplayName(),
+                p.getStudent().getEmail() == null ? "" : p.getStudent().getEmail(),
+                p.getLaneNo(),
+                p.getCarColor(),
+                p.getParticipantStatus(),
+                p.getProgressPoints(),
+                p.getScoreTotal()
+            ))
+            .toList();
+        return new RoomDetailsResponse(
+            room.getId(),
+            room.getRoomCode(),
+            room.getTitle(),
+            room.getClassName(),
+            room.getStatus(),
+            room.getMaxParticipants(),
+            room.getQuestionTimeMs(),
+            room.getInitialDifficulty(),
+            room.isEnableLuckEvents(),
+            room.isEnablePathChoice(),
+            room.getStartAt(),
+            room.getRaceDurationMinutes(),
+            rows
+        );
     }
 
     @Transactional(readOnly = true)

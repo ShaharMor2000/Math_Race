@@ -153,7 +153,7 @@ export function LoginPage({
           if (activeRoleRef.current === "student") {
             const googleName = getGoogleDisplayName(response.credential);
             if (googleName) setDisplayName((current) => current || googleName);
-            setError("Google account connected. Enter a room code and click Join Race.");
+            setError("חשבון Google מחובר. הזינו קוד חדר ולחצו הצטרפות.");
             return;
           }
 
@@ -162,7 +162,7 @@ export function LoginPage({
           try {
             await onGoogleLogin(response.credential);
           } catch {
-            setError("Google sign-in failed.");
+            setError("התחברות Google נכשלה.");
           } finally {
             setLoading(false);
           }
@@ -195,7 +195,7 @@ export function LoginPage({
         await onTeacherLogin(email, password);
       }
     } catch (err) {
-      setError(err.message || (teacherMode === "register" ? "Registration failed." : "Sign in failed. Check your username and password."));
+      setError(err.message || (teacherMode === "register" ? "ההרשמה נכשלה." : "ההתחברות נכשלה. בדקו שם משתמש וסיסמה."));
     } finally {
       setLoading(false);
     }
@@ -208,7 +208,7 @@ export function LoginPage({
     try {
       await onStudentJoin(selectedRoomCode.trim().toUpperCase(), displayName.trim(), email.trim());
     } catch (err) {
-      setError(err.message || "Could not join this room. Check the room code and try again.");
+      setError(err.message || "לא ניתן להצטרף לחדר. בדקו את הקוד ונסו שוב.");
     } finally {
       setLoading(false);
     }
@@ -225,7 +225,7 @@ export function LoginPage({
         await onStudentJoin(roomCode.trim().toUpperCase(), displayName.trim(), email.trim());
       }
     } catch (err) {
-      setError(err.message || (studentMode === "login" ? "Could not open student dashboard." : "Could not join this room. Check the room code and try again."));
+      setError(err.message || (studentMode === "login" ? "לא ניתן לפתוח את דשבורד התלמיד." : "לא ניתן להצטרף לחדר."));
     } finally {
       setLoading(false);
     }
@@ -238,7 +238,7 @@ export function LoginPage({
     try {
       await onStudentDashboardLogin(email.trim());
     } catch (err) {
-      setError(err.message || "Could not open student dashboard.");
+      setError(err.message || "לא ניתן לפתוח את דשבורד התלמיד.");
     } finally {
       setLoading(false);
     }
@@ -246,12 +246,12 @@ export function LoginPage({
 
   const continueWithGoogle = () => {
     if (!import.meta.env.VITE_GOOGLE_CLIENT_ID || !onGoogleLogin) {
-      setError("Google login is not configured.");
+      setError("התחברות Google לא מוגדרת.");
       return;
     }
 
     if (!googleReady || !window.google?.accounts?.id) {
-      setError("Google login is still loading. Try again in a moment.");
+      setError("Google עדיין נטען. נסו שוב בעוד רגע.");
       return;
     }
 
@@ -268,21 +268,23 @@ export function LoginPage({
 
       <div className="auth-card">
         <div className="auth-info-wrap">
-          <button className="auth-info-button" type="button" aria-label="About Math Race">
+          <button className="auth-info-button" type="button" aria-label="אודות מרוץ חשבון">
             i
           </button>
           <div className="auth-tooltip" role="tooltip">
-            Math Race is a real-time classroom math racing game. Teachers create race rooms, students join with a room code,
-            solve questions, and progress on a live race track.
+            מרוץ חשבון הוא משחק מתמטיקה בזמן אמת לכיתה. מורים יוצרים חדרים, תלמידים מצטרפים עם קוד,
+            פותרים שאלות ומתקדמים על מסלול חי.
           </div>
         </div>
 
         <div className="auth-card-header">
-          <h1>Math Race</h1>
-          <h2>Real-Time Mathematics Competition Platform</h2>
+          <p className="auth-card-kicker">פלטפורמת כיתה</p>
+          <h1>מרוץ חשבון</h1>
+          <h2>תחרות מתמטיקה בזמן אמת</h2>
+          <p>מורים יוצרים מרוצים, תלמידים מצטרפים עם קוד חדר ומתקדמים על מסלול חי.</p>
         </div>
 
-        <div className="auth-tabs" role="tablist" aria-label="Choose role">
+        <div className="auth-tabs" role="tablist" aria-label="בחירת תפקיד">
           <button
             type="button"
             className={activeRole === "student" ? "auth-tab active" : "auth-tab"}
@@ -291,7 +293,7 @@ export function LoginPage({
               onRoleChange("student");
             }}
           >
-            Student
+            תלמיד
           </button>
           <button
             type="button"
@@ -301,7 +303,7 @@ export function LoginPage({
               onRoleChange("teacher");
             }}
           >
-            Teacher
+            מורה
           </button>
         </div>
 
@@ -313,38 +315,38 @@ export function LoginPage({
                 className={teacherMode === "login" ? "auth-tab active" : "auth-tab"}
                 onClick={() => setTeacherMode("login")}
               >
-                Login
+                התחברות
               </button>
               <button
                 type="button"
                 className={teacherMode === "register" ? "auth-tab active" : "auth-tab"}
                 onClick={() => setTeacherMode("register")}
               >
-                Register
+                הרשמה
               </button>
             </div>
             {teacherMode === "register" ? (
               <label>
-                <span>Full Name</span>
+                <span>שם מלא</span>
                 <div className="auth-input-wrap">
                   <span className="auth-input-icon" aria-hidden="true"><MiniIcon type="user" /></span>
                   <input
                     value={fullName}
                     onChange={(event) => setFullName(event.target.value)}
-                    placeholder="Enter full name"
+                    placeholder="הזינו שם מלא"
                     required
                   />
                 </div>
               </label>
             ) : null}
             <label>
-              <span>Username</span>
+              <span>אימייל / שם משתמש</span>
               <div className="auth-input-wrap">
                 <span className="auth-input-icon" aria-hidden="true"><MiniIcon type="user" /></span>
                 <input
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="Enter username"
+                  placeholder="teacher@school.com"
                   type="text"
                   autoComplete="username"
                   required
@@ -352,13 +354,13 @@ export function LoginPage({
               </div>
             </label>
             <label>
-              <span>Password</span>
+              <span>סיסמה</span>
               <div className="auth-input-wrap">
                 <span className="auth-input-icon" aria-hidden="true"><MiniIcon type="lock" /></span>
                 <input
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Enter password"
+                  placeholder="הזינו סיסמה"
                   type="password"
                   autoComplete="current-password"
                   required
@@ -366,14 +368,14 @@ export function LoginPage({
               </div>
             </label>
             <button className="auth-submit" disabled={loading}>
-              {loading ? "Please wait..." : teacherMode === "register" ? "Create Account" : "Login"}
+              {loading ? "ממתין..." : teacherMode === "register" ? "יצירת חשבון" : "התחברות"}
             </button>
             <div className="auth-separator">
-              <span>OR</span>
+              <span>או</span>
             </div>
             <button className="auth-google-button" type="button" onClick={continueWithGoogle}>
               <GoogleIcon />
-              Continue with Google
+              המשך עם Google
             </button>
           </form>
         ) : (
@@ -384,25 +386,25 @@ export function LoginPage({
                 className={studentMode === "register" ? "auth-tab active" : "auth-tab"}
                 onClick={() => setStudentMode("register")}
               >
-                Register
+                הרשמה
               </button>
               <button
                 type="button"
                 className={studentMode === "login" ? "auth-tab active" : "auth-tab"}
                 onClick={() => setStudentMode("login")}
               >
-                Login
+                התחברות
               </button>
             </div>
 
             <label>
-              <span>Student Email</span>
+              <span>מייל תלמיד</span>
               <div className="auth-input-wrap">
                 <span className="auth-input-icon" aria-hidden="true"><MiniIcon type="user" /></span>
                 <input
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="Enter student email"
+                  placeholder="student@school.com"
                   type="email"
                   autoComplete="email"
                   required
@@ -413,26 +415,26 @@ export function LoginPage({
             {studentMode === "register" ? (
               <>
                 <label>
-                  <span>Student Name</span>
+                  <span>שם תלמיד</span>
                   <div className="auth-input-wrap">
                     <span className="auth-input-icon" aria-hidden="true"><MiniIcon type="user" /></span>
                     <input
                       value={displayName}
                       onChange={(event) => setDisplayName(event.target.value)}
-                      placeholder="Enter student name"
+                      placeholder="הזינו שם תלמיד"
                       autoComplete="name"
                       required
                     />
                   </div>
                 </label>
                 <label>
-                  <span>Room Code</span>
+                  <span>קוד חדר</span>
                   <div className="auth-input-wrap">
                     <span className="auth-input-icon" aria-hidden="true"><MiniIcon type="room" /></span>
                     <input
                       value={roomCode}
                       onChange={(event) => setRoomCode(event.target.value)}
-                      placeholder="Enter room code"
+                      placeholder="ABCDEF"
                       autoCapitalize="characters"
                       required
                     />
@@ -440,22 +442,22 @@ export function LoginPage({
                 </label>
                 <div className="open-races-login">
                   <div className="row between">
-                    <strong>Open Races</strong>
+                    <strong>מרוצים פתוחים</strong>
                     <button type="button" className="ghost" onClick={onRefreshOpenRaces}>
-                      Refresh
+                      רענון
                     </button>
                   </div>
-                  {openRaces.length === 0 ? <p className="muted">No open races right now.</p> : null}
+                  {openRaces.length === 0 ? <p className="muted">אין מרוצים פתוחים כרגע.</p> : null}
                   {openRaces.map((race) => (
                     <div key={race.roomCode} className="open-race-row compact">
                       <div>
                         <strong>{race.title}</strong>
                         <p className="muted">
-                          {race.roomCode} | {race.registeredCount}/{race.maxParticipants}
+                          {race.roomCode} · {race.registeredCount}/{race.maxParticipants}
                         </p>
                       </div>
-                      <button type="button" disabled={loading || !displayName.trim() || !email.trim()} onClick={() => void joinOpenRace(race.roomCode)}>
-                        Join
+                      <button type="button" className="btn btn-primary btn-sm" disabled={loading || !displayName.trim() || !email.trim()} onClick={() => void joinOpenRace(race.roomCode)}>
+                        הצטרף
                       </button>
                     </div>
                   ))}
@@ -467,14 +469,14 @@ export function LoginPage({
               className="auth-submit"
               disabled={loading || !email.trim() || (studentMode === "register" && (!displayName.trim() || !roomCode.trim()))}
             >
-              {loading ? "Please wait..." : studentMode === "login" ? "Login" : "Join Race"}
+              {loading ? "ממתין..." : studentMode === "login" ? "כניסה לדשבורד" : "הצטרפות למרוץ"}
             </button>
             <div className="auth-separator">
-              <span>OR</span>
+              <span>או</span>
             </div>
             <button className="auth-google-button" type="button" onClick={continueWithGoogle}>
               <GoogleIcon />
-              Continue with Google
+              המשך עם Google
             </button>
           </form>
         )}
