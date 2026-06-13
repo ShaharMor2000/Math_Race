@@ -73,18 +73,33 @@ public class AuthService {
     @Transactional
     public TeacherLoginResponse loginTeacherWithGoogle(TeacherGoogleLoginRequest request) {
         JsonNode tokenInfo = verifyGoogleToken(request.idToken());
+        if (tokenInfo.has("error")) {
+            throw new ApiException(
+                "GOOGLE_LOGIN_FAILED",
+                tokenInfo.path("error_description").asText("Google token verification failed")
+            );
+        }
+
         String email = tokenInfo.path("email").asText("").toLowerCase(Locale.ROOT);
         String fullName = tokenInfo.path("name").asText("Google Teacher");
-        String emailVerified = tokenInfo.path("email_verified").asText("false");
+        JsonNode emailVerifiedNode = tokenInfo.path("email_verified");
+        boolean emailVerified = emailVerifiedNode.isMissingNode()
+            ? false
+            : emailVerifiedNode.isBoolean()
+                ? emailVerifiedNode.asBoolean()
+                : "true".equalsIgnoreCase(emailVerifiedNode.asText("false"));
         String audience = tokenInfo.path("aud").asText("");
 
         if (email.isBlank()) {
             throw new ApiException("GOOGLE_LOGIN_FAILED", "Google token does not include email");
         }
-        if (!"true".equalsIgnoreCase(emailVerified)) {
+        if (!emailVerified) {
             throw new ApiException("GOOGLE_LOGIN_FAILED", "Google email is not verified");
         }
-        if (!googleClientId.isBlank() && !googleClientId.equals(audience)) {
+        if (googleClientId.isBlank()) {
+            throw new ApiException("GOOGLE_LOGIN_NOT_CONFIGURED", "Google client ID is not configured on the server");
+        }
+        if (!googleClientId.equals(audience)) {
             throw new ApiException("GOOGLE_LOGIN_FAILED", "Google token audience mismatch");
         }
 

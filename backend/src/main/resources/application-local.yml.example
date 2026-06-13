@@ -1,7 +1,12 @@
-# Copy to application-local.yml and set your local MySQL credentials.
+# Copy to application-local.yml and set your local values.
 # application-local.yml is gitignored.
 
 spring:
   datasource:
     username: root
     password: your-mysql-password-here
+
+app:
+  auth:
+    # Must match frontend VITE_GOOGLE_CLIENT_ID (Google Cloud OAuth Web client)
+    google-client-id: your-google-oauth-client-id.apps.googleusercontent.com

@@ -12,4 +12,4 @@ app:
     jwt-secret: "replace-with-strong-secret-at-least-32-chars"
     jwt-expiration-minutes: 180
   auth:
-    google-client-id: ""
+    google-client-id: ${GOOGLE_CLIENT_ID:}

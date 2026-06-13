@@ -20,6 +20,51 @@
   --color-danger: #f87171;
   --color-success: #4ade80;
 
+  --btn-primary-bg: #ffffff;
+  --btn-primary-fg: #0c1628;
+  --btn-primary-hover-bg: #e8eef5;
+
+  --btn-ghost-hover-bg: rgba(255, 255, 255, 0.06);
+  --btn-secondary-hover-bg: rgba(52, 211, 153, 0.22);
+
+  --toast-error-bg: rgba(127, 29, 29, 0.94);
+  --toast-error-border: rgba(252, 165, 165, 0.45);
+  --toast-error-text: #fee2e2;
+  --toast-success-bg: rgba(6, 78, 59, 0.94);
+  --toast-success-border: rgba(110, 231, 183, 0.45);
+  --toast-success-text: #d1fae5;
+  --toast-info-bg: rgba(12, 44, 82, 0.94);
+  --toast-info-border: rgba(125, 211, 252, 0.4);
+  --toast-info-text: #e0f2fe;
+
+  --event-toast-bg: rgba(6, 78, 59, 0.22);
+  --event-toast-border: rgba(52, 211, 153, 0.45);
+  --event-toast-text: #bbf7d0;
+
+  --overlay-bg: rgba(4, 10, 20, 0.62);
+  --confirm-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
+
+  --hover-card-bg: rgba(32, 48, 72, 0.92);
+  --hover-card-border: rgba(255, 255, 255, 0.2);
+
+  --chip-hover-bg: #ffffff;
+  --chip-hover-text: #0c1628;
+  --chip-hover-border: rgba(255, 255, 255, 0.28);
+
+  --tab-hover-bg: rgba(255, 255, 255, 0.08);
+  --tab-hover-text: var(--color-text);
+  --tab-active-bg: #ffffff;
+  --tab-active-text: #0c1628;
+
+  --info-hover-bg: rgba(255, 255, 255, 0.1);
+  --info-hover-text: var(--color-text);
+  --tooltip-bg: rgba(22, 36, 58, 0.98);
+  --tooltip-text: var(--color-text-muted);
+  --tooltip-border: var(--color-border);
+
+  --auth-submit-hover-bg: #e8eef5;
+  --auth-submit-hover-text: #0c1628;
+
   --radius-sm: 10px;
   --radius-md: 14px;
   --radius-lg: 18px;
@@ -71,11 +116,14 @@ body {
   font-weight: 700;
   box-shadow: var(--shadow-sm);
   backdrop-filter: blur(12px);
+  transition: transform 160ms ease, background 160ms ease, color 160ms ease, border-color 160ms ease;
 }
 
-.theme-toggle:hover {
+.theme-toggle:hover:not(:disabled) {
   transform: translateY(-1px);
-  background: #ffffff;
+  background: var(--chip-hover-bg);
+  color: var(--chip-hover-text);
+  border-color: var(--chip-hover-border);
 }
 
 .auth-app {
@@ -301,19 +349,20 @@ body {
   display: grid;
   place-items: center;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--color-border);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.04);
-  color: #a1a1aa;
+  color: var(--color-text-muted);
   font-size: 14px;
   font-weight: 800;
   transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
 }
 
-.auth-info-button:hover {
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.08);
+.auth-info-button:hover:not(:disabled) {
+  transform: none;
+  color: var(--info-hover-text);
+  border-color: var(--chip-hover-border);
+  background: var(--info-hover-bg);
 }
 
 .auth-tooltip {
@@ -322,13 +371,13 @@ body {
   left: 0;
   width: min(300px, calc(100vw - 48px));
   padding: 12px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--tooltip-border);
   border-radius: 12px;
-  background: rgba(31, 45, 68, 0.96);
-  color: #d4d4d8;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-text);
   font-size: 13px;
   line-height: 1.5;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.36);
+  box-shadow: var(--shadow-md);
   opacity: 0;
   pointer-events: none;
   transform: translateY(-4px);
@@ -356,19 +405,20 @@ body {
   min-height: 44px;
   border-radius: 9px;
   background: transparent;
-  color: #a1a1aa;
+  color: var(--color-text-muted);
   font-weight: 700;
   transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
-.auth-tab:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.04);
+.auth-tab:hover:not(:disabled) {
+  transform: none;
+  color: var(--tab-hover-text);
+  background: var(--tab-hover-bg);
 }
 
 .auth-tab.active {
-  color: #0a0a0a;
-  background: #ffffff;
+  color: var(--tab-active-text);
+  background: var(--tab-active-bg);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
 }
 
@@ -469,7 +519,8 @@ body {
 
 .auth-submit:hover:not(:disabled) {
   transform: translateY(-2px);
-  background: #e4e4e7;
+  background: var(--auth-submit-hover-bg);
+  color: var(--auth-submit-hover-text);
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42);
 }
 
@@ -497,6 +548,129 @@ body {
   transform: translateY(-2px);
   background: #e4e4e7;
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.22);
+}
+
+.google-signin-shell {
+  position: relative;
+  width: 100%;
+  min-height: 52px;
+}
+
+.google-signin-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 20px;
+  border-radius: 12px;
+  border: 1px solid #dadce0;
+  background: #ffffff;
+  color: #1f1f1f;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  box-shadow:
+    0 1px 2px rgba(60, 64, 67, 0.08),
+    0 1px 3px rgba(60, 64, 67, 0.06);
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+  user-select: none;
+}
+
+.google-signin-shell:not(.is-disabled):not(.is-loading):hover .google-signin-visual {
+  background: #f8f9fa;
+  border-color: #d2e3fc;
+  box-shadow:
+    0 2px 6px rgba(60, 64, 67, 0.12),
+    0 4px 12px rgba(66, 133, 244, 0.08);
+  transform: translateY(-1px);
+}
+
+.google-signin-shell:not(.is-disabled):not(.is-loading):active .google-signin-visual {
+  background: #f1f3f4;
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.1);
+}
+
+.google-signin-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.google-signin-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.google-signin-label {
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.google-signin-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  opacity: 0.01;
+  overflow: hidden;
+  cursor: pointer;
+  border-radius: 12px;
+}
+
+.google-signin-overlay > div {
+  width: 100% !important;
+  min-height: 52px !important;
+}
+
+.google-signin-overlay iframe {
+  width: 100% !important;
+  min-height: 52px !important;
+  margin: 0 !important;
+}
+
+.google-signin-shell.is-loading .google-signin-visual,
+.google-signin-shell.is-disabled .google-signin-visual {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+.google-signin-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(66, 133, 244, 0.18);
+  border-top-color: #4285f4;
+  border-radius: 50%;
+  animation: googleSpin 680ms linear infinite;
+}
+
+@keyframes googleSpin {
+  to { transform: rotate(360deg); }
+}
+
+:root[data-theme="dark"] .google-signin-visual {
+  border-color: #dadce0;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.28),
+    0 1px 2px rgba(60, 64, 67, 0.12);
+}
+
+:root[data-theme="dark"] .google-signin-shell:not(.is-disabled):not(.is-loading):hover .google-signin-visual {
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.32),
+    0 2px 8px rgba(66, 133, 244, 0.14);
 }
 
 .google-icon {
@@ -604,31 +778,33 @@ body {
 
 .app-role-tab {
   background: transparent;
-  color: #a1a1aa;
+  color: var(--color-text-muted);
 }
 
-.app-role-tab:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.04);
+.app-role-tab:hover:not(:disabled) {
+  transform: none;
+  color: var(--tab-hover-text);
+  background: var(--tab-hover-bg);
 }
 
 .app-role-tab.active {
-  color: #0a0a0a;
-  background: #ffffff;
+  color: var(--tab-active-text);
+  background: var(--tab-active-bg);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
 }
 
 .app-logout-button {
   min-width: 92px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-  color: #d4d4d8;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
 }
 
-.app-logout-button:hover {
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.08);
+.app-logout-button:hover:not(:disabled) {
+  transform: none;
+  color: var(--tab-hover-text);
+  border-color: var(--chip-hover-border);
+  background: var(--tab-hover-bg);
 }
 
 .card {
@@ -867,9 +1043,9 @@ body {
 
 .dashboard-room-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(40, 60, 88, 0.88);
-  box-shadow: 0 18px 42px rgba(5, 12, 24, 0.28);
+  border-color: var(--hover-card-border);
+  background: var(--hover-card-bg);
+  box-shadow: var(--shadow-md);
 }
 
 .dashboard-error {
@@ -1099,13 +1275,13 @@ button:not(:disabled):hover {
 
 .btn-primary {
   border: none;
-  background: var(--color-primary);
-  color: var(--color-primary-fg);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-fg);
   box-shadow: var(--shadow-sm);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #e8eef5;
+  background: var(--btn-primary-hover-bg);
   box-shadow: var(--shadow-md);
 }
 
@@ -1116,7 +1292,7 @@ button:not(:disabled):hover {
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: rgba(52, 211, 153, 0.22);
+  background: var(--btn-secondary-hover-bg);
 }
 
 .btn-ghost,
@@ -1130,7 +1306,7 @@ button.ghost {
 button.ghost:hover:not(:disabled) {
   color: var(--color-text);
   border-color: var(--color-border-strong);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--btn-ghost-hover-bg);
 }
 
 .btn-danger {
@@ -1371,6 +1547,13 @@ button.ghost:hover:not(:disabled) {
   min-width: 88px;
 }
 
+.theme-chip:hover:not(:disabled) {
+  transform: none;
+  background: var(--chip-hover-bg);
+  color: var(--chip-hover-text);
+  border-color: var(--chip-hover-border);
+}
+
 .room-code {
   font-size: 22px;
   font-weight: 700;
@@ -1407,11 +1590,11 @@ button.ghost:hover:not(:disabled) {
 }
 
 .google-login-wrap {
-  margin-top: 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  align-items: flex-start;
+  align-items: stretch;
+  gap: 12px;
+  margin-top: 16px;
 }
 
 .status-pill {
@@ -1461,10 +1644,12 @@ button.ghost:hover:not(:disabled) {
 }
 
 .event-toast {
-  background: rgba(21, 170, 99, 0.24);
-  border: 1px solid rgba(21, 170, 99, 0.6);
-  border-radius: 12px;
-  padding: 10px 12px;
+  background: var(--event-toast-bg);
+  border: 1px solid var(--event-toast-border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  color: var(--event-toast-text);
+  font-weight: 650;
 }
 
 .timer {
@@ -1662,14 +1847,15 @@ button.ghost:hover:not(:disabled) {
   padding: 10px;
   border-radius: 12px;
   background: transparent;
-  color: #a1a1aa;
+  color: var(--color-text-muted);
   text-align: center;
   transition: background 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
-.create-step:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.05);
+.create-step:hover:not(:disabled) {
+  transform: none;
+  color: var(--tab-hover-text);
+  background: var(--tab-hover-bg);
 }
 
 .create-step span {
@@ -1690,14 +1876,14 @@ button.ghost:hover:not(:disabled) {
 }
 
 .create-step.active {
-  color: #101827;
-  background: #ffffff;
+  color: var(--tab-active-text);
+  background: var(--tab-active-bg);
   box-shadow: 0 12px 28px rgba(5, 12, 24, 0.24);
 }
 
 .create-step.active span {
-  background: #142033;
-  color: #ffffff;
+  background: var(--tab-active-text);
+  color: var(--tab-active-bg);
 }
 
 .create-step.done {
@@ -1847,15 +2033,16 @@ button.ghost:hover:not(:disabled) {
   border: 1px solid transparent;
   border-radius: 11px;
   background: transparent;
-  color: #a1a1aa;
+  color: var(--color-text-muted);
   text-align: start;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
 }
 
-.difficulty-option:hover {
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
+.difficulty-option:hover:not(:disabled) {
+  transform: none;
+  border-color: var(--color-border-strong);
+  background: var(--tab-hover-bg);
+  color: var(--tab-hover-text);
 }
 
 .difficulty-option.active {
@@ -2335,6 +2522,51 @@ button.ghost:hover:not(:disabled) {
   --color-accent: #059669;
   --color-accent-soft: rgba(5, 150, 105, 0.1);
 
+  --btn-primary-bg: #102033;
+  --btn-primary-fg: #ffffff;
+  --btn-primary-hover-bg: #1a3352;
+
+  --btn-ghost-hover-bg: rgba(16, 32, 51, 0.06);
+  --btn-secondary-hover-bg: rgba(5, 150, 105, 0.18);
+
+  --toast-error-bg: rgba(254, 226, 226, 0.98);
+  --toast-error-border: rgba(239, 68, 68, 0.35);
+  --toast-error-text: #991b1b;
+  --toast-success-bg: rgba(209, 250, 229, 0.98);
+  --toast-success-border: rgba(16, 185, 129, 0.35);
+  --toast-success-text: #065f46;
+  --toast-info-bg: rgba(224, 242, 254, 0.98);
+  --toast-info-border: rgba(14, 165, 233, 0.35);
+  --toast-info-text: #0c4a6e;
+
+  --event-toast-bg: rgba(209, 250, 229, 0.72);
+  --event-toast-border: rgba(16, 185, 129, 0.35);
+  --event-toast-text: #065f46;
+
+  --overlay-bg: rgba(16, 32, 51, 0.38);
+  --confirm-shadow: 0 24px 60px rgba(60, 110, 140, 0.22);
+
+  --hover-card-bg: rgba(255, 255, 255, 0.96);
+  --hover-card-border: rgba(16, 32, 51, 0.16);
+
+  --chip-hover-bg: #1a3352;
+  --chip-hover-text: #ffffff;
+  --chip-hover-border: rgba(16, 32, 51, 0.24);
+
+  --tab-hover-bg: rgba(16, 32, 51, 0.08);
+  --tab-hover-text: #102033;
+  --tab-active-bg: #102033;
+  --tab-active-text: #ffffff;
+
+  --info-hover-bg: rgba(16, 32, 51, 0.08);
+  --info-hover-text: #102033;
+  --tooltip-bg: rgba(255, 255, 255, 0.98);
+  --tooltip-text: #426075;
+  --tooltip-border: rgba(16, 32, 51, 0.12);
+
+  --auth-submit-hover-bg: #0a1828;
+  --auth-submit-hover-text: #ffffff;
+
   background: var(--color-bg);
   color: var(--color-text);
 }
@@ -2457,13 +2689,13 @@ button.ghost:hover:not(:disabled) {
 :root[data-theme="light"] .auth-tab.active,
 :root[data-theme="light"] .app-role-tab.active,
 :root[data-theme="light"] .create-step.active {
-  color: #ffffff;
-  background: #102033;
+  color: var(--tab-active-text);
+  background: var(--tab-active-bg);
 }
 
 :root[data-theme="light"] .create-step.active span {
-  background: #ffffff;
-  color: #102033;
+  background: var(--tab-active-text);
+  color: var(--tab-active-bg);
 }
 
 :root[data-theme="light"] .auth-form input,
@@ -2533,10 +2765,16 @@ button.ghost:hover:not(:disabled) {
 }
 
 :root[data-theme="light"] .theme-toggle {
-  border-color: rgba(36, 72, 96, 0.14);
-  background: #102033;
-  color: #ffffff;
-  box-shadow: 0 12px 30px rgba(60, 110, 140, 0.22);
+  border-color: var(--chip-hover-border);
+  background: var(--tab-active-bg);
+  color: var(--tab-active-text);
+  box-shadow: var(--shadow-sm);
+}
+
+:root[data-theme="light"] .theme-toggle:hover:not(:disabled) {
+  background: var(--chip-hover-bg);
+  color: var(--chip-hover-text);
+  border-color: var(--chip-hover-border);
 }
 
 :root[data-theme="light"] .auth-error,
@@ -2557,25 +2795,35 @@ button.ghost:hover:not(:disabled) {
   align-items: center;
   gap: 12px;
   padding: 12px 18px;
-  border-radius: 14px;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-md);
   max-width: min(92vw, 560px);
+  color: var(--color-text);
+  animation: toastIn 220ms ease;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 .toast-error {
-  background: rgba(120, 24, 24, 0.92);
-  border: 1px solid rgba(255, 120, 120, 0.45);
+  background: var(--toast-error-bg);
+  border: 1px solid var(--toast-error-border);
+  color: var(--toast-error-text);
 }
 
 .toast-success {
-  background: rgba(18, 88, 52, 0.92);
-  border: 1px solid rgba(119, 255, 144, 0.45);
+  background: var(--toast-success-bg);
+  border: 1px solid var(--toast-success-border);
+  color: var(--toast-success-text);
 }
 
 .toast-info {
-  background: rgba(20, 48, 88, 0.92);
-  border: 1px solid rgba(50, 210, 255, 0.35);
+  background: var(--toast-info-bg);
+  border: 1px solid var(--toast-info-border);
+  color: var(--toast-info-text);
 }
 
 .toast-close {
@@ -2584,6 +2832,107 @@ button.ghost:hover:not(:disabled) {
   color: inherit;
   font-size: 1.2rem;
   padding: 0 4px;
+  opacity: 0.85;
+}
+
+.toast-close:hover:not(:disabled) {
+  transform: none;
+  opacity: 1;
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: var(--overlay-bg);
+  backdrop-filter: blur(4px);
+  animation: fadeIn 180ms ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.confirm-dialog {
+  width: min(420px, 100%);
+  padding: 22px;
+  box-shadow: var(--confirm-shadow);
+  animation: dialogIn 200ms ease;
+}
+
+@keyframes dialogIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.confirm-dialog h3 {
+  margin: 0 0 10px;
+  font-size: 20px;
+}
+
+.confirm-dialog p {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: 1.55;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.google-button-host {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.google-button-host > div {
+  width: 100% !important;
+}
+
+.google-config-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+}
+
+.google-setup-hint {
+  margin-top: 8px;
+  padding: 18px;
+  text-align: start;
+}
+
+.google-setup-hint h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.google-setup-hint p {
+  margin: 0 0 12px;
+  color: var(--color-text-muted);
+  line-height: 1.55;
+}
+
+.google-setup-steps {
+  margin: 0 0 16px;
+  padding-inline-start: 20px;
+  color: var(--color-text-muted);
+  line-height: 1.65;
+}
+
+.google-setup-steps code {
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--tab-hover-bg);
+  color: var(--color-text);
 }
 
 .live-badge {
@@ -2986,6 +3335,12 @@ button.ghost:hover:not(:disabled) {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.03);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.participant-item:hover {
+  background: var(--tab-hover-bg);
+  border-color: var(--chip-hover-border);
 }
 
 .participant-main {
@@ -3143,6 +3498,12 @@ button.ghost:hover:not(:disabled) {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.03);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.premium-open-race:hover {
+  background: var(--tab-hover-bg);
+  border-color: var(--chip-hover-border);
 }
 
 .room-card-action-btn {

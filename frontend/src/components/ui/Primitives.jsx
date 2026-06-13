@@ -71,6 +71,32 @@ export function PageHeader({ kicker, title, subtitle, actions, badge }) {
   );
 }
 
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmText = "אישור",
+  cancelText = "ביטול",
+  onConfirm,
+  onCancel,
+  danger = false
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <div className="confirm-dialog surface-card">
+        <h3 id="confirm-title">{title}</h3>
+        <p>{message}</p>
+        <div className="confirm-actions">
+          <Button variant="ghost" onClick={onCancel}>{cancelText}</Button>
+          <Button variant={danger ? "danger" : "primary"} onClick={onConfirm}>{confirmText}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AppChrome({ brand, subtitle, actions, theme, onToggleTheme }) {
   return (
     <header className="app-chrome">

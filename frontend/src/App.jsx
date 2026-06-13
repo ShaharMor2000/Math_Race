@@ -10,7 +10,7 @@ import { StudentJoin } from "./components/StudentJoin";
 import { StudentRaceScreen } from "./components/StudentRaceScreen";
 import { TeacherDashboard } from "./components/TeacherDashboard";
 import { Toast } from "./components/Toast";
-import { AppChrome, Button } from "./components/ui/Primitives";
+import { AppChrome, Button, ConfirmDialog } from "./components/ui/Primitives";
 import { useRaceStream } from "./hooks/useRaceStream";
 import { api } from "./services/api";
 import { session } from "./services/session";
@@ -54,6 +54,8 @@ function App() {
   const [studentView, setStudentView] = useState("dashboard");
   const [studentRacePaused, setStudentRacePaused] = useState(false);
   const [toast, setToast] = useState(null);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [pendingLogout, setPendingLogout] = useState(null);
 
   const showToast = useCallback((message, type = "error") => {
     if (!message) return;
@@ -406,6 +408,22 @@ function App() {
     resetTeacherFlow();
   };
 
+  const requestLogout = (type) => {
+    setPendingLogout(type);
+    setLogoutConfirmOpen(true);
+  };
+
+  const cancelLogout = () => {
+    setLogoutConfirmOpen(false);
+    setPendingLogout(null);
+  };
+
+  const confirmLogout = () => {
+    if (pendingLogout === "teacher") logoutTeacher();
+    if (pendingLogout === "student") resetStudentFlow();
+    cancelLogout();
+  };
+
   const resetTeacherFlow = () => {
     setTeacherFinalRows(null);
     setTeacherWinnerName(null);
@@ -552,11 +570,13 @@ function App() {
   if (isLoginScreen) {
     return (
       <main className="auth-app">
+        <Toast message={toast?.message} type={toast?.type} onClose={() => setToast(null)} />
         <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label="החלפת מצב תצוגה">
           {theme === "dark" ? "☀️ בהיר" : "🌙 כהה"}
         </button>
         <LoginPage
           activeRole={role}
+          theme={theme}
           initialRoomCode={joinRoomCode || ""}
           openRaces={openRaces}
           onRoleChange={setRole}
@@ -574,6 +594,16 @@ function App() {
   return (
     <main className="app-shell" dir="rtl">
       <Toast message={toast?.message} type={toast?.type} onClose={() => setToast(null)} />
+      <ConfirmDialog
+        open={logoutConfirmOpen}
+        title="התנתקות"
+        message="האם אתה בטוח שברצונך להתנתק?"
+        confirmText="התנתק"
+        cancelText="ביטול"
+        danger
+        onConfirm={confirmLogout}
+        onCancel={cancelLogout}
+      />
       <FloatingNumbersBackground />
 
       <div className="app">
@@ -603,12 +633,12 @@ function App() {
                 </div>
               ) : null}
               {teacherId ? (
-                <Button variant="ghost" size="sm" onClick={logoutTeacher}>
+                <Button variant="ghost" size="sm" onClick={() => requestLogout("teacher")}>
                   יציאה
                 </Button>
               ) : null}
               {studentEmail && !teacherId ? (
-                <Button variant="ghost" size="sm" onClick={resetStudentFlow}>
+                <Button variant="ghost" size="sm" onClick={() => requestLogout("student")}>
                   יציאה
                 </Button>
               ) : null}
@@ -711,7 +741,7 @@ function App() {
                 setStudentView("join");
                 void refreshOpenRaces();
               }}
-              onLogout={resetStudentFlow}
+              onLogout={() => requestLogout("student")}
             />
           ) : null}
           {studentRoomCode && studentView === "race" && studentParticipantStatus === "PENDING" && !studentFinalRows ? (
