@@ -84,7 +84,7 @@ public class SseEventPublisher {
     private void send(SseEmitter emitter, String eventType, StreamEventDto dto) {
         try {
             emitter.send(SseEmitter.event().name(eventType).data(dto));
-        } catch (IOException e) {
+        } catch (IOException | IllegalStateException e) {
             emitter.completeWithError(e);
         }
     }

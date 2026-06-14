@@ -1,8 +1,8 @@
 package com.mathrace.dto.race;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Email;
 
 public record AddStudentRequest(
-    @NotBlank @Size(max = 80) String displayName
+    @NotBlank @Email String email
 ) {}

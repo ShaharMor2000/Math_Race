@@ -1,8 +1,16 @@
 import { Badge, Card } from "./ui/Primitives";
 import { QuestionCard } from "./QuestionCard";
 
+const raceStatusLabels = {
+  LOBBY: "ממתין להתחלה",
+  LOCKED: "ממתין להתחלה",
+  RUNNING: "מרוץ פעיל",
+  PAUSED: "מרוץ מושהה"
+};
+
 export function StudentRaceScreen({
   roomCode,
+  raceStatus,
   progress,
   score,
   question,
@@ -15,13 +23,16 @@ export function StudentRaceScreen({
   onSwapQuestion
 }) {
   const pct = Math.max(0, Math.min(100, (progress / 1000) * 100));
+  const isWaitingForStart = raceStatus === "LOBBY" || raceStatus === "LOCKED";
 
   return (
     <section className="stack student-race-screen">
       <Card className="student-race-hero">
         <div className="student-race-top">
           <div>
-            <Badge variant="live">מרוץ פעיל</Badge>
+            <Badge variant={isWaitingForStart ? "warning" : "live"}>
+              {raceStatusLabels[raceStatus] || "מרוץ"}
+            </Badge>
             <h2>חדר {roomCode}</h2>
           </div>
           <div className="student-race-stats">
@@ -41,13 +52,21 @@ export function StudentRaceScreen({
         </div>
       </Card>
 
-      {racePaused ? (
+      {isWaitingForStart ? (
+        <Card className="waiting-card premium-waiting">
+          <div className="waiting-icon" aria-hidden="true">⏳</div>
+          <h3>נכנסת לחדר המרוץ</h3>
+          <p>ממתין שהמורה יתחיל את המרוץ...</p>
+        </Card>
+      ) : null}
+
+      {!isWaitingForStart && racePaused ? (
         <div className="banner banner-warning student-paused">המרוץ הושהה על ידי המורה. המתן להמשך...</div>
       ) : null}
 
-      {pendingPathDecision ? (
+      {!isWaitingForStart && pendingPathDecision ? (
         <Card className="path-choice premium-path-choice">
-          <h3>צומת — בחר מסלול</h3>
+          <h3>צומת - בחר מסלול</h3>
           <p className="muted">אוטוסטרדה = סיכון גבוה ותגמול גדול. דרך עפר = יציב ואיטי יותר.</p>
           <div className="path-choice-grid">
             <button type="button" className="highway-btn" onClick={() => void onChoosePath("HIGHWAY")}>
@@ -62,7 +81,7 @@ export function StudentRaceScreen({
         </Card>
       ) : null}
 
-      {!racePaused && question ? (
+      {!isWaitingForStart && !racePaused && question ? (
         <QuestionCard
           question={question}
           onAnswer={onAnswer}
@@ -71,9 +90,9 @@ export function StudentRaceScreen({
         />
       ) : null}
 
-      {!racePaused && !question && !pendingPathDecision ? (
+      {!isWaitingForStart && !racePaused && !question && !pendingPathDecision ? (
         <Card className="waiting-card premium-waiting">
-          <div className="waiting-icon" aria-hidden="true">🧮</div>
+          <div className="waiting-icon" aria-hidden="true">∑</div>
           <p>ממתין לשאלה הבאה...</p>
         </Card>
       ) : null}

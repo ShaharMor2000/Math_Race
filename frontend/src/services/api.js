@@ -84,10 +84,10 @@ export const api = {
 
   roomDetails: (roomCode) => request(`/teacher/races/${roomCode}`),
 
-  addStudent: (roomCode, displayName) =>
+  addStudent: (roomCode, email) =>
     request(`/teacher/races/${roomCode}/students`, {
       method: "POST",
-      body: JSON.stringify({ displayName })
+      body: JSON.stringify({ email })
     }),
 
   startRace: (roomCode) =>
@@ -118,6 +118,11 @@ export const api = {
   rejectParticipant: (roomCode, participantId) =>
     request(`/teacher/races/${roomCode}/participants/${participantId}/reject`, {
       method: "POST"
+    }),
+
+  removeParticipant: (roomCode, participantId) =>
+    request(`/teacher/races/${roomCode}/participants/${participantId}`, {
+      method: "DELETE"
     }),
 
   joinRace: (roomCode, displayName, email) =>

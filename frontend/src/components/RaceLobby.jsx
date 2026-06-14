@@ -7,20 +7,21 @@ export function RaceLobby({
   participants,
   onApproveParticipant,
   onRejectParticipant,
+  onRemoveParticipant,
   onAddStudent,
   onStartRace,
   onBack,
   onEditRace
 }) {
-  const [newStudentName, setNewStudentName] = useState("");
+  const [newStudentEmail, setNewStudentEmail] = useState("");
   const pending = participants.filter((p) => p.participantStatus === "PENDING");
   const approved = participants.filter((p) => p.participantStatus === "ACTIVE");
 
   const addStudent = async (event) => {
     event.preventDefault();
-    if (!newStudentName.trim()) return;
-    await onAddStudent(newStudentName.trim());
-    setNewStudentName("");
+    if (!newStudentEmail.trim()) return;
+    await onAddStudent(newStudentEmail.trim());
+    setNewStudentEmail("");
   };
 
   return (
@@ -46,16 +47,19 @@ export function RaceLobby({
       </Card>
 
       {roomStatus === "LOCKED" ? (
-        <div className="banner banner-warning">החדר ננעל — הגיע למכסת המשתתפים</div>
+        <div className="banner banner-warning">החדר ננעל - הגיע למכסת המשתתפים</div>
       ) : null}
 
       <Card className="lobby-add-form">
-        <h3>הוספת תלמיד לרוסטר</h3>
+        <h3>הוספת תלמיד לפי מייל</h3>
         <form onSubmit={addStudent} className="lobby-add-row">
           <Input
-            value={newStudentName}
-            onChange={(e) => setNewStudentName(e.target.value)}
-            placeholder="שם תלמיד"
+            type="email"
+            value={newStudentEmail}
+            onChange={(e) => setNewStudentEmail(e.target.value)}
+            placeholder="מייל תלמיד"
+            inputMode="email"
+            autoComplete="email"
           />
           <Button type="submit">הוסף</Button>
         </form>
@@ -108,7 +112,12 @@ export function RaceLobby({
                 </div>
                 <div className="participant-meta">
                   <span className="muted">מסלול {p.laneNo}</span>
-                  <Badge variant="success">מאושר</Badge>
+                  <div className="participant-actions">
+                    <Badge variant="success">מאושר</Badge>
+                    <Button variant="danger" size="sm" onClick={() => void onRemoveParticipant(p.participantId)}>
+                      מחק
+                    </Button>
+                  </div>
                 </div>
               </article>
             ))}

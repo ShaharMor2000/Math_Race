@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Button, Card, Field, Input } from "./ui/Primitives";
 
-export function StudentJoin({ openRaces = [], onJoin, onRefresh, onDashboardLogin }) {
+export function StudentJoin({ openRaces = [], onJoin, onRefresh, email: controlledEmail = "", onEmailChange }) {
   const [roomCode, setRoomCode] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmailState] = useState(controlledEmail);
   const [submittingCode, setSubmittingCode] = useState(false);
   const [submittingRoomCode, setSubmittingRoomCode] = useState(null);
 
@@ -30,10 +30,13 @@ export function StudentJoin({ openRaces = [], onJoin, onRefresh, onDashboardLogi
       setSubmittingRoomCode(null);
     }
   };
-
-  const openDashboard = async () => {
-    if (!email.trim()) return;
-    await onDashboardLogin(email.trim());
+
+  const updateEmail = (nextEmail) => {
+
+    setEmailState(nextEmail);
+
+    onEmailChange?.(nextEmail);
+
   };
 
   return (
@@ -47,7 +50,7 @@ export function StudentJoin({ openRaces = [], onJoin, onRefresh, onDashboardLogi
           <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="לדוגמה: יואב כהן" required />
         </Field>
         <Field label="מייל תלמיד">
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="student@school.com" required />
+          <Input type="email" value={email} onChange={(e) => updateEmail(e.target.value)} placeholder="student@school.com" required />
         </Field>
 
         <div className="join-section-head">
@@ -87,11 +90,8 @@ export function StudentJoin({ openRaces = [], onJoin, onRefresh, onDashboardLogi
         <Button type="submit" disabled={!canSubmit || submittingCode}>
           {submittingCode ? "נרשם..." : "הצטרף למרוץ"}
         </Button>
-        <Button variant="ghost" disabled={!email.trim()} onClick={() => void openDashboard()}>
-          כניסה לדשבורד שלי
-        </Button>
-      </form>
+      </form>
     </Card>
   );
 }
-
+

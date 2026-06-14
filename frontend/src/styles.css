@@ -3439,10 +3439,13 @@ button.ghost:hover:not(:disabled) {
 
 .question-text-premium {
   margin: 0;
-  font-size: clamp(1.4rem, 2.5vw, 2rem);
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-size: clamp(2rem, 4vw, 3rem);
   font-weight: 800;
   line-height: 1.35;
   text-align: center;
+  letter-spacing: 0.02em;
+  unicode-bidi: isolate;
   padding: 8px 0;
 }
 

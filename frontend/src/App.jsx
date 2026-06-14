@@ -37,6 +37,7 @@ function App() {
 
   const [studentRoomCode, setStudentRoomCode] = useState(session.getStudentRoomCode());
   const [studentEmail, setStudentEmail] = useState(session.getStudentEmail());
+  const [studentJoinEmail, setStudentJoinEmail] = useState("");
   const [studentParticipantId, setStudentParticipantId] = useState(session.getStudentParticipantId());
   const [studentParticipantStatus, setStudentParticipantStatus] = useState(session.getStudentStatus());
   const [studentProgress, setStudentProgress] = useState(0);
@@ -110,17 +111,6 @@ function App() {
     void refreshStudentDashboard(studentEmail);
   }, [role, studentEmail]);
 
-  useEffect(() => {
-    if (role !== "student" || !studentRoomCode || studentParticipantStatus !== "ACTIVE") return;
-    const activeRace = studentRaces.find(
-      (race) => race.roomCode === studentRoomCode && (race.roomStatus === "RUNNING" || race.roomStatus === "PAUSED")
-    );
-    if (activeRace) {
-      setStudentView("race");
-      setStudentRacePaused(activeRace.roomStatus === "PAUSED");
-    }
-  }, [role, studentRoomCode, studentParticipantStatus, studentRaces]);
-
   const pushTeacherEvent = useCallback((type, message) => {
     if (!message) return;
     setTeacherEventFeed((prev) => [
@@ -148,6 +138,20 @@ function App() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (role !== "student" || !studentRoomCode || studentParticipantStatus !== "ACTIVE") return;
+    const activeRace = studentRaces.find(
+      (race) => race.roomCode === studentRoomCode && (race.raceStatus === "RUNNING" || race.raceStatus === "PAUSED")
+    );
+    if (activeRace) {
+      setStudentView("race");
+      setStudentRacePaused(activeRace.raceStatus === "PAUSED");
+      if (activeRace.raceStatus === "RUNNING" && !studentQuestion) {
+        void fetchNextQuestion(studentRoomCode);
+      }
+    }
+  }, [role, studentRoomCode, studentParticipantStatus, studentRaces, studentQuestion, fetchNextQuestion]);
 
   useEffect(() => {
     if (!studentRoomCode || !studentParticipantId || studentParticipantStatus !== "ACTIVE") return;
@@ -192,8 +196,9 @@ function App() {
     setStudentDashboardLoading(true);
     setStudentDashboardError("");
     try {
-      const races = await api.listStudentRaces(email);
+      const [races, availableRaces] = await Promise.all([api.listStudentRaces(email), api.listOpenRaces()]);
       setStudentRaces(races);
+      setOpenRaces(availableRaces);
     } catch (error) {
       setStudentDashboardError(error.message || "לא ניתן לטעון את דשבורד התלמיד.");
     } finally {
@@ -205,6 +210,7 @@ function App() {
     const normalizedEmail = email.trim();
     session.saveStudentEmail(normalizedEmail);
     setStudentEmail(normalizedEmail);
+    setStudentJoinEmail(normalizedEmail);
     setStudentView("dashboard");
     await refreshStudentDashboard(normalizedEmail);
   };
@@ -346,10 +352,18 @@ function App() {
     }, "ההרשמה נדחתה");
   };
 
-  const addStudent = async (displayName) => {
+  const removeParticipant = async (participantId) => {
     if (!activeRoomCode) return;
     await runAction(async () => {
-      await api.addStudent(activeRoomCode, displayName);
+      await api.removeParticipant(activeRoomCode, participantId);
+      await loadRoomDetails(activeRoomCode);
+    }, "התלמיד נמחק");
+  };
+
+  const addStudent = async (email) => {
+    if (!activeRoomCode) return;
+    await runAction(async () => {
+      await api.addStudent(activeRoomCode, email);
       await loadRoomDetails(activeRoomCode);
     }, "התלמיד נוסף");
   };
@@ -376,6 +390,19 @@ function App() {
         setStudentQuestion(null);
       }
     } catch (error) {
+      const message = String(error?.message || "");
+      const shouldContinue =
+        !answer ||
+        message.includes("QUESTION_ALREADY_ANSWERED") ||
+        message.includes("Question already answered") ||
+        message.includes("API error");
+
+      setStudentQuestion(null);
+      setPendingPathDecision(false);
+      if (shouldContinue && studentRoomCode) {
+        await fetchNextQuestion(studentRoomCode);
+        return;
+      }
       showToast(error.message || "שליחת התשובה נכשלה");
     }
   };
@@ -442,6 +469,7 @@ function App() {
   const resetStudentFlow = () => {
     session.clearStudent();
     setStudentEmail(null);
+    setStudentJoinEmail("");
     setStudentFinalRows(null);
     setStudentWinnerName(null);
     setStudentRoomCode(null);
@@ -515,7 +543,11 @@ function App() {
       if (studentParticipantId && Number(payload.participantId) === studentParticipantId) {
         setStudentParticipantStatus("ACTIVE");
         session.saveStudent(session.getStudentToken(), studentParticipantId, studentRoomCode, "ACTIVE", studentEmail);
-        void refreshStudentDashboard(studentEmail);
+        void refreshStudentDashboard(studentEmail).then(() => {
+          if (studentRoomCode && !studentQuestion) {
+            void fetchNextQuestion(studentRoomCode);
+          }
+        });
         setStudentEventMessage("אושרת למרוץ!");
         setStudentView("race");
       }
@@ -614,6 +646,16 @@ function App() {
           onToggleTheme={toggleTheme}
           actions={
             <>
+              {role === "student" && studentView === "join" && !studentRoomCode ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!studentJoinEmail.trim()}
+                  onClick={() => void handleStudentDashboardLogin(studentJoinEmail)}
+                >
+                  בחזרה לדשבורד
+                </Button>
+              ) : null}
               {!teacherId && !studentEmail ? (
                 <div className="app-role-tabs">
                   <button
@@ -635,6 +677,18 @@ function App() {
               {teacherId ? (
                 <Button variant="ghost" size="sm" onClick={() => requestLogout("teacher")}>
                   יציאה
+                </Button>
+              ) : null}
+              {studentEmail && !teacherId && studentView !== "dashboard" ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setStudentView("dashboard");
+                    void refreshStudentDashboard(studentEmail);
+                  }}
+                >
+                  חזרה
                 </Button>
               ) : null}
               {studentEmail && !teacherId ? (
@@ -679,6 +733,7 @@ function App() {
               participants={participants}
               onApproveParticipant={approveParticipant}
               onRejectParticipant={rejectParticipant}
+              onRemoveParticipant={removeParticipant}
               onAddStudent={addStudent}
               onStartRace={startRace}
               onBack={resetTeacherFlow}
@@ -714,26 +769,51 @@ function App() {
               openRaces={openRaces}
               onJoin={handleStudentJoin}
               onRefresh={refreshOpenRaces}
-              onDashboardLogin={handleStudentDashboardLogin}
+              email={studentJoinEmail}
+              onEmailChange={setStudentJoinEmail}
             />
           ) : null}
           {studentEmail && studentView === "dashboard" ? (
             <StudentDashboard
               email={studentEmail}
               races={studentRaces}
+              openRaces={openRaces}
               loading={studentDashboardLoading}
               errorMessage={studentDashboardError}
               activeRoomCode={studentRoomCode}
               activeParticipantStatus={studentParticipantStatus}
               onRefresh={() => void refreshStudentDashboard()}
-              onEnterRace={() => {
+              onJoinOpenRace={() => {
+                setStudentJoinEmail(studentEmail || "");
+                setStudentView("join");
+                void refreshOpenRaces();
+              }}
+              onEnterRace={async (roomCode) => {
+                const targetRoomCode = roomCode || studentRoomCode;
+                if (!targetRoomCode || !studentEmail) return;
+                const displayName = studentEmail.split("@")[0] || "Student";
+                const res = await api.joinRace(targetRoomCode, displayName, studentEmail);
+                session.saveStudent(
+                  res.studentToken,
+                  res.participant.participantId,
+                  res.room.roomCode,
+                  res.participant.participantStatus,
+                  studentEmail
+                );
+                setStudentRoomCode(res.room.roomCode);
+                setStudentParticipantId(res.participant.participantId);
+                setStudentParticipantStatus(res.participant.participantStatus);
                 setStudentView("race");
-                setStudentRacePaused(false);
+                setStudentRacePaused(res.room.status === "PAUSED");
+                if (res.room.status === "RUNNING") {
+                  await fetchNextQuestion(res.room.roomCode);
+                }
               }}
               onFindRace={() => {
                 const email = studentEmail;
                 session.clearStudent();
                 if (email) session.saveStudentEmail(email);
+                setStudentJoinEmail(email || "");
                 setStudentRoomCode(null);
                 setStudentParticipantId(null);
                 setStudentParticipantStatus(null);
@@ -755,6 +835,7 @@ function App() {
           {studentRoomCode && studentView === "race" && studentParticipantStatus === "ACTIVE" && !studentFinalRows ? (
             <StudentRaceScreen
               roomCode={studentRoomCode}
+              raceStatus={studentRaces.find((race) => race.roomCode === studentRoomCode)?.raceStatus}
               progress={studentProgress}
               score={studentScore}
               question={studentQuestion}

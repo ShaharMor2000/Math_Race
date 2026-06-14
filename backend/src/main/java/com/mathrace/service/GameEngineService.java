@@ -660,8 +660,15 @@ public class GameEngineService {
             .toList();
 
         Map<Long, Integer> rankByParticipant = new HashMap<>();
+        int currentRank = 0;
+        RaceParticipant previous = null;
         for (int i = 0; i < ranking.size(); i++) {
-            rankByParticipant.put(ranking.get(i).getId(), i + 1);
+            RaceParticipant participant = ranking.get(i);
+            if (previous == null || !sameFinalResult(previous, participant)) {
+                currentRank = i + 1;
+            }
+            rankByParticipant.put(participant.getId(), currentRank);
+            previous = participant;
         }
 
         for (RaceParticipant participant : ranking) {
@@ -682,6 +689,9 @@ public class GameEngineService {
         }
 
         String winnerName = winner == null ? resolveWinnerName(room, ranking) : winner.getStudent().getDisplayName();
+        if (hasFirstPlaceTie(ranking)) {
+            winnerName = "שוויון";
+        }
         Map<String, Object> payload = new HashMap<>();
         payload.put("winnerParticipantId", room.getWinnerParticipantId());
         payload.put("winnerName", winnerName);
@@ -697,5 +707,14 @@ public class GameEngineService {
             .map(p -> p.getStudent().getDisplayName())
             .findFirst()
             .orElse("");
+    }
+
+    private boolean sameFinalResult(RaceParticipant a, RaceParticipant b) {
+        return a.getProgressPoints() == b.getProgressPoints()
+            && a.getScoreTotal() == b.getScoreTotal();
+    }
+
+    private boolean hasFirstPlaceTie(List<RaceParticipant> ranking) {
+        return ranking.size() > 1 && sameFinalResult(ranking.get(0), ranking.get(1));
     }
 }

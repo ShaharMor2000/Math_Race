@@ -17,6 +17,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -151,6 +152,17 @@ public class TeacherRaceController {
         AuthPrincipal principal = AuthSupport.requireTeacher(request);
         raceRoomService.rejectParticipant(roomCode, principal.teacherId(), participantId);
         return Map.of("participantId", participantId, "participantStatus", "REJECTED");
+    }
+
+    @DeleteMapping("/{roomCode}/participants/{participantId}")
+    public Map<String, Object> removeParticipant(
+        HttpServletRequest request,
+        @PathVariable String roomCode,
+        @PathVariable Long participantId
+    ) {
+        AuthPrincipal principal = AuthSupport.requireTeacher(request);
+        raceRoomService.removeParticipant(roomCode, principal.teacherId(), participantId);
+        return Map.of("participantId", participantId, "participantStatus", "REMOVED");
     }
 
     @GetMapping("/{roomCode}/leaderboard")

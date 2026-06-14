@@ -30,4 +30,7 @@ public interface RaceParticipantRepository extends JpaRepository<RaceParticipant
     long countByRaceRoomAndParticipantStatus(RaceRoom room, ParticipantStatus status);
     long countByRaceRoomAndParticipantStatusIn(RaceRoom room, List<ParticipantStatus> statuses);
     Optional<RaceParticipant> findByRaceRoomAndStudent(RaceRoom room, Student student);
+
+    @EntityGraph(attributePaths = "student")
+    Optional<RaceParticipant> findByRaceRoomAndStudent_EmailIgnoreCase(RaceRoom room, String email);
 }

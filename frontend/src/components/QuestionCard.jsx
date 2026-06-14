@@ -27,11 +27,19 @@ export function QuestionCard({ question, onAnswer, onSwap, feedback }) {
     if (submitting) return;
     setSubmitting(true);
     const responseTimeMs = Date.now() - startedAt;
-    await onAnswer(answer, responseTimeMs);
-    setSubmitting(false);
+    try {
+      await onAnswer(answer, responseTimeMs);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const timerDanger = remainingMs < 3000;
+  const formattedQuestion = question.questionText
+    .replace(/\bx\b/g, "×")
+    .replace(/\*/g, "×")
+    .replace(/\s+/g, " ")
+    .trim();
 
   return (
     <Card className={`question-card-premium ${feedback || ""}`}>
@@ -51,7 +59,7 @@ export function QuestionCard({ question, onAnswer, onSwap, feedback }) {
         <div className="banner banner-info">רמז פעיל — פחות אפשרויות תשובה</div>
       ) : null}
 
-      <p className="question-text-premium">{question.questionText}</p>
+      <p className="question-text-premium" dir="ltr">{formattedQuestion}</p>
 
       <div className="question-options">
         {question.options.map((option) => (

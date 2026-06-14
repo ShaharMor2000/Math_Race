@@ -106,6 +106,27 @@ public class RaceRoomService {
     @Transactional
     public JoinRaceResponse joinRace(JoinRaceRequest request) {
         RaceRoom room = getByRoomCodeOrThrow(request.roomCode());
+        String normalizedEmail = request.email().trim();
+
+        RaceParticipant existingParticipant = raceParticipantRepository
+            .findByRaceRoomAndStudent_EmailIgnoreCase(room, normalizedEmail)
+            .orElse(null);
+        if (existingParticipant != null) {
+            String studentToken = jwtService.issueStudentToken(existingParticipant.getId(), room.getId());
+            Student student = existingParticipant.getStudent();
+            return new JoinRaceResponse(
+                studentToken,
+                new JoinRaceResponse.StudentData(student.getId(), student.getDisplayName()),
+                new JoinRaceResponse.ParticipantData(
+                    existingParticipant.getId(),
+                    existingParticipant.getLaneNo(),
+                    existingParticipant.getCarColor(),
+                    existingParticipant.getParticipantStatus()
+                ),
+                new JoinRaceResponse.RoomData(room.getRoomCode(), room.getStatus())
+            );
+        }
+
         if (room.getStatus() != RaceRoomStatus.LOBBY && room.getStatus() != RaceRoomStatus.LOCKED) {
             throw new ApiException("ROOM_CLOSED", "Room is not available");
         }
@@ -117,7 +138,7 @@ public class RaceRoomService {
 
         Student student = new Student();
         student.setDisplayName(request.displayName());
-        student.setEmail(request.email());
+        student.setEmail(normalizedEmail);
         studentRepository.save(student);
 
         RaceParticipant participant = new RaceParticipant();
@@ -185,12 +206,17 @@ public class RaceRoomService {
         if (room.getStatus() != RaceRoomStatus.LOBBY && room.getStatus() != RaceRoomStatus.LOCKED) {
             throw new ApiException("ROOM_CLOSED", "Room is not available");
         }
+        String normalizedEmail = request.email().trim();
+        if (raceParticipantRepository.findByRaceRoomAndStudent_EmailIgnoreCase(room, normalizedEmail).isPresent()) {
+            throw new ApiException("STUDENT_ALREADY_REGISTERED", "Student is already registered to this race");
+        }
         if (countRegisteredParticipants(room) >= room.getMaxParticipants()) {
             throw new ApiException("ROOM_FULL", "Room is full");
         }
 
         Student student = new Student();
-        student.setDisplayName(request.displayName());
+        student.setDisplayName(displayNameFromEmail(normalizedEmail));
+        student.setEmail(normalizedEmail);
         studentRepository.save(student);
 
         RaceParticipant participant = new RaceParticipant();
@@ -297,6 +323,24 @@ public class RaceRoomService {
     }
 
     @Transactional
+    public void removeParticipant(String roomCode, Long teacherId, Long participantId) {
+        RaceRoom room = getByRoomCodeOrThrow(roomCode);
+        ensureTeacherOwnsRoom(teacherId, room);
+        if (room.getStatus() != RaceRoomStatus.LOBBY && room.getStatus() != RaceRoomStatus.LOCKED) {
+            throw new ApiException("ROOM_NOT_EDITABLE", "Students can be removed only before the race starts");
+        }
+
+        RaceParticipant participant = getParticipantInRoomOrThrow(room, participantId);
+        String displayName = participant.getStudent().getDisplayName();
+        raceParticipantRepository.delete(participant);
+        unlockRoomIfNeeded(room);
+        sseEventPublisher.publish(room.getRoomCode(), "registration_rejected", java.util.Map.of(
+            "participantId", participantId,
+            "displayName", displayName
+        ), participantId);
+    }
+
+    @Transactional
     public RaceRoom startRace(String roomCode) {
         RaceRoom room = getByRoomCodeOrThrow(roomCode);
         if (room.getStatus() != RaceRoomStatus.LOBBY && room.getStatus() != RaceRoomStatus.LOCKED) {
@@ -364,10 +408,21 @@ public class RaceRoomService {
     @Transactional(readOnly = true)
     public FinalResultsResponse getFinalResults(String roomCode) {
         RaceRoom room = getByRoomCodeOrThrow(roomCode);
-        List<RaceResult> rows = raceResultRepository.findByRaceRoomOrderByFinalRankAsc(room);
-        List<FinalResultsResponse.ResultRow> leaderboard = rows.stream()
-            .map(r -> new FinalResultsResponse.ResultRow(
-                r.getFinalRank(),
+        List<RaceResult> rows = raceResultRepository.findByRaceRoomOrderByFinalRankAsc(room).stream()
+            .sorted((a, b) -> {
+                int progressCompare = Integer.compare(b.getFinalProgress(), a.getFinalProgress());
+                if (progressCompare != 0) {
+                    return progressCompare;
+                }
+                return Integer.compare(b.getFinalScore(), a.getFinalScore());
+            })
+            .toList();
+        List<FinalResultsResponse.ResultRow> leaderboard = IntStream.range(0, rows.size())
+            .mapToObj(i -> {
+                RaceResult r = rows.get(i);
+                int rank = finalRankFor(rows, i);
+                return new FinalResultsResponse.ResultRow(
+                rank,
                 r.getRaceParticipant().getStudent().getDisplayName(),
                 r.getFinalProgress(),
                 r.getFinalScore(),
@@ -376,9 +431,11 @@ public class RaceRoomService {
                 r.getTotalCorrect(),
                 r.getTotalWrong(),
                 r.getTotalEvents()
-            ))
+                );
+            })
             .toList();
-        String winnerName = rows.stream()
+        boolean firstPlaceTie = leaderboard.size() > 1 && leaderboard.get(0).rank() == leaderboard.get(1).rank();
+        String winnerName = firstPlaceTie ? "שוויון" : rows.stream()
             .filter(r -> room.getWinnerParticipantId() != null && r.getRaceParticipant().getId().equals(room.getWinnerParticipantId()))
             .map(r -> r.getRaceParticipant().getStudent().getDisplayName())
             .findFirst()
@@ -434,5 +491,28 @@ public class RaceRoomService {
             room,
             List.of(ParticipantStatus.PENDING, ParticipantStatus.ACTIVE)
         );
+    }
+
+    private int finalRankFor(List<RaceResult> rows, int index) {
+        if (index == 0) {
+            return 1;
+        }
+        RaceResult current = rows.get(index);
+        RaceResult previous = rows.get(index - 1);
+        if (current.getFinalProgress() == previous.getFinalProgress()
+            && current.getFinalScore() == previous.getFinalScore()) {
+            return finalRankFor(rows, index - 1);
+        }
+        return index + 1;
+    }
+
+    private String displayNameFromEmail(String email) {
+        int atIndex = email.indexOf('@');
+        String localPart = atIndex > 0 ? email.substring(0, atIndex) : email;
+        String displayName = localPart.trim();
+        if (displayName.isBlank()) {
+            return "Student";
+        }
+        return displayName.length() > 80 ? displayName.substring(0, 80) : displayName;
     }
 }
