@@ -1,14 +1,5 @@
-import { Badge, Button, Card, EmptyState, PageHeader, StatCard } from "./ui/Primitives";
-
-const raceStatusLabels = {
-  DRAFT: "טיוטה",
-  LOBBY: "ממתין להתחלה",
-  LOCKED: "החדר מלא",
-  RUNNING: "פעיל",
-  PAUSED: "מושהה",
-  FINISHED: "הסתיים",
-  CANCELLED: "בוטל"
-};
+import { useMemo, useState } from "react";
+import { Badge, Button, Card, EmptyState, Field, Input, PageHeader } from "./ui/Primitives";
 
 const participantStatusLabels = {
   PENDING: "ממתין לאישור מורה",
@@ -19,138 +10,165 @@ const participantStatusLabels = {
 };
 
 export function StudentDashboard({
-  email,
-  races,
+  displayName,
   openRaces = [],
   loading,
   errorMessage,
   activeRoomCode,
   activeParticipantStatus,
   onRefresh,
-  onJoinOpenRace,
+  onJoinGeneral,
+  onJoinSpecific,
   onEnterRace,
-  onFindRace,
-  onLogout
+  onLeaveRace
 }) {
-  const registeredRoomCodes = new Set(races.map((race) => race.roomCode));
-  const availableOpenRaces = openRaces.filter((race) => !registeredRoomCodes.has(race.roomCode));
-  const totalRaces = races.length + availableOpenRaces.length;
-  const registeredRacesCount = races.length;
-  const finishedRaces = races.filter((race) => race.raceStatus === "FINISHED").length;
-  const bestScore = races.reduce((best, race) => Math.max(best, Number(race.scoreTotal || 0)), 0);
-  const avgProgress = registeredRacesCount
-    ? Math.round(races.reduce((sum, race) => sum + Number(race.progressPoints || 0), 0) / registeredRacesCount)
-    : 0;
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const activeRace = activeRoomCode ? races.find((race) => race.roomCode === activeRoomCode) : null;
-  const showEmptyState = races.length === 0 && availableOpenRaces.length === 0 && !loading;
+  const trimmedQuery = searchQuery.trim();
+  const normalizedQuery = trimmedQuery.toUpperCase().replace(/\s/g, "");
+  const hasSearch = Boolean(trimmedQuery);
+
+  const filteredRaces = useMemo(() => {
+    if (!hasSearch) return openRaces;
+    const lowerQuery = trimmedQuery.toLowerCase();
+    return openRaces.filter(
+      (race) =>
+        race.title.toLowerCase().includes(lowerQuery) ||
+        race.roomCode.includes(normalizedQuery)
+    );
+  }, [openRaces, trimmedQuery, normalizedQuery, hasSearch]);
+
+  const exactCodeMatch = useMemo(
+    () => openRaces.find((race) => race.roomCode === normalizedQuery),
+    [openRaces, normalizedQuery]
+  );
+
+  const showEmptyState = openRaces.length === 0 && !activeRoomCode && !loading && !hasSearch;
+
+  const openSearchJoin = () => {
+    if (filteredRaces.length === 1) {
+      const race = filteredRaces[0];
+      onJoinSpecific?.(race.roomCode, race.title);
+      return;
+    }
+    if (exactCodeMatch) {
+      onJoinSpecific?.(exactCodeMatch.roomCode, exactCodeMatch.title);
+      return;
+    }
+    if (normalizedQuery.length >= 4) {
+      onJoinSpecific?.(normalizedQuery, trimmedQuery || "מרוץ");
+    }
+  };
+
+  const canContinue =
+    filteredRaces.length === 1 || Boolean(exactCodeMatch) || normalizedQuery.length >= 4;
 
   return (
-    <section className="student-dashboard" dir="rtl">
-      <PageHeader kicker="תלמיד" title="דשבורד תלמיד" subtitle={email} />
+    <section className="student-dashboard student-home" dir="rtl">
+      <PageHeader
+        kicker="ברוכים הבאים"
+        title="מרוץ חשבון"
+        subtitle="בחרו מרוץ והצטרפו עם שם למשחק — בלי הרשמה"
+        actions={
+          <Button onClick={onJoinGeneral}>
+            הצטרפות כללית
+          </Button>
+        }
+      />
 
       {errorMessage ? <p className="dashboard-error">{errorMessage}</p> : null}
 
-      <div className="student-stats">
-        <StatCard label="מרוצים" value={totalRaces} />
-        <StatCard label="הסתיימו" value={finishedRaces} />
-        <StatCard label="שיא ניקוד" value={bestScore} />
-        <StatCard label="התקדמות ממוצעת" value={`${avgProgress}/1000`} />
-      </div>
+      <Card className="student-code-search">
+        <Field label="חיפוש מרוץ">
+          <div className="student-code-search-row">
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="שם מרוץ או קוד חדר"
+              aria-label="שם מרוץ או קוד חדר"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (canContinue) openSearchJoin();
+                }
+              }}
+            />
+            <Button size="sm" disabled={!canContinue} onClick={openSearchJoin}>
+              המשך
+            </Button>
+          </div>
+        </Field>
+        {hasSearch && filteredRaces.length === 0 ? (
+          <p className="muted student-code-search-hint">
+            {normalizedQuery.length >= 4
+              ? "לא נמצא ברשימה — אפשר להמשיך עם הקוד שהזנתם."
+              : "לא נמצאו מרוצים. נסו שם אחר, קוד מלא (4+ תווים), או הצטרפות כללית."}
+          </p>
+        ) : null}
+      </Card>
 
-      {activeRace ? (
+      {activeRoomCode ? (
         <Card className="student-current-race">
           <div>
             <Badge variant={activeParticipantStatus === "ACTIVE" ? "success" : "warning"}>
               {participantStatusLabels[activeParticipantStatus] || activeParticipantStatus}
             </Badge>
-            <h3>{activeRace.title}</h3>
-            <p className="muted">קוד חדר: {activeRace.roomCode}</p>
+            <h3>{displayName ? `שחק/י: ${displayName}` : "המרוץ שלך"}</h3>
+            <p className="muted">קוד חדר: {activeRoomCode}</p>
           </div>
-          <Button onClick={onEnterRace} disabled={activeParticipantStatus !== "ACTIVE"}>
-            {activeParticipantStatus === "ACTIVE" ? "כניסה למרוץ" : "ממתין לאישור"}
-          </Button>
+          <div className="student-current-race-actions">
+            <Button onClick={onEnterRace} disabled={activeParticipantStatus !== "ACTIVE"}>
+              {activeParticipantStatus === "ACTIVE" ? "כניסה למרוץ" : "ממתין לאישור מורה"}
+            </Button>
+            {onLeaveRace ? (
+              <Button variant="ghost" onClick={onLeaveRace}>
+                עזיבת מרוץ
+              </Button>
+            ) : null}
+          </div>
         </Card>
       ) : null}
 
-      {availableOpenRaces.length > 0 ? (
-        <div className="student-open-races">
-          <div className="join-section-head">
-            <strong>מרוצים פתוחים להרשמה</strong>
-            <Button variant="ghost" size="sm" onClick={onRefresh} disabled={loading}>
-              {loading ? "מרענן..." : "רענון"}
-            </Button>
-          </div>
-          <div className="open-race-list">
-            {availableOpenRaces.map((race) => (
-              <Card key={race.roomCode} className="open-race-row premium-open-race">
-                <div>
-                  <Badge variant="default">{raceStatusLabels[race.status] || race.status}</Badge>
-                  <h3>{race.title}</h3>
-                  <p className="muted">
-                    קוד: {race.roomCode} · רשומים: {race.registeredCount}/{race.maxParticipants}
-                  </p>
-                </div>
-                <Button size="sm" onClick={() => onJoinOpenRace?.(race.roomCode)}>
-                  הרשמה למרוץ
-                </Button>
-              </Card>
-            ))}
-          </div>
+      <div className="student-open-races">
+        <div className="join-section-head">
+          <strong>{hasSearch ? "תוצאות חיפוש" : "מרוצים פתוחים"}</strong>
+          <Button variant="ghost" size="sm" onClick={onRefresh} disabled={loading}>
+            {loading ? "מרענן..." : "רענון"}
+          </Button>
         </div>
-      ) : null}
+
+        {filteredRaces.length === 0 && !loading ? (
+          <p className="muted">
+            {hasSearch
+              ? "אין מרוצים פתוחים שתואמים לחיפוש."
+              : "אין כרגע מרוצים פתוחים. חפשו לפי שם או קוד, או השתמשו בהצטרפות כללית."}
+          </p>
+        ) : null}
+
+        <div className="open-race-list">
+          {filteredRaces.map((race) => (
+            <Card key={race.roomCode} className="open-race-row premium-open-race">
+              <div>
+                <h3>{race.title}</h3>
+                <p className="muted">
+                  קוד: {race.roomCode} · רשומים: {race.registeredCount}/{race.maxParticipants}
+                </p>
+              </div>
+              <Button size="sm" onClick={() => onJoinSpecific?.(race.roomCode, race.title)}>
+                הצטרפות
+              </Button>
+            </Card>
+          ))}
+        </div>
+      </div>
 
       {showEmptyState ? (
         <EmptyState
-          title="עדיין אין מרוצים"
-          description="כשמורה יפתח מרוץ חדש הוא יופיע כאן, ותוכלו להירשם אליו."
-          action={<Button onClick={onFindRace}>מצא מרוץ להצטרפות</Button>}
+          title="אין מרוצים פתוחים כרגע"
+          description="חפשו לפי שם מרוץ או קוד חדר, או השתמשו בהצטרפות כללית."
+          action={<Button onClick={onJoinGeneral}>הצטרפות כללית</Button>}
         />
       ) : null}
-
-      <div className="student-race-list">
-        {races.map((race) => {
-          const progressPct = Math.min(100, Math.max(0, Math.round((Number(race.progressPoints || 0) / 1000) * 100)));
-          const totalAnswers = Number(race.correctCount || 0) + Number(race.wrongCount || 0);
-          const accuracy = totalAnswers ? Math.round((Number(race.correctCount || 0) / totalAnswers) * 100) : 0;
-          const canEnterRace =
-            race.participantStatus === "ACTIVE" &&
-            !["FINISHED", "CANCELLED"].includes(race.raceStatus);
-          const enterRaceLabel =
-            race.raceStatus === "RUNNING" || race.raceStatus === "PAUSED"
-              ? "כניסה למרוץ"
-              : "כניסה לחדר";
-
-          return (
-            <Card key={`${race.roomCode}-${race.joinedAt}`} className="student-race-card">
-              <div className="student-race-card-head">
-                <div>
-                  <Badge variant="default">{raceStatusLabels[race.raceStatus] || race.raceStatus}</Badge>
-                  <h3>{race.title}</h3>
-                  <p className="muted">קוד: {race.roomCode}</p>
-                </div>
-                <strong className="student-score-pill">{race.scoreTotal || 0} נק׳</strong>
-              </div>
-
-              <div className="progress-bar">
-                <div className="progress-fill" style={{ width: `${progressPct}%` }} />
-              </div>
-
-              <div className="student-report-grid">
-                <span>התקדמות: {race.progressPoints || 0}/1000</span>
-                <span>סטטוס: {participantStatusLabels[race.participantStatus] || race.participantStatus}</span>
-                <span>דיוק: {accuracy}%</span>
-                <span>נכון/טעויות: {race.correctCount || 0}/{race.wrongCount || 0}</span>
-              </div>
-              {canEnterRace ? (
-                <Button onClick={() => onEnterRace?.(race.roomCode)}>
-                  {enterRaceLabel}
-                </Button>
-              ) : null}
-            </Card>
-          );
-        })}
-      </div>
     </section>
   );
 }

@@ -1,97 +1,86 @@
-import { useState } from "react";
-import { Button, Card, Field, Input } from "./ui/Primitives";
-
-export function StudentJoin({ openRaces = [], onJoin, onRefresh, email: controlledEmail = "", onEmailChange }) {
-  const [roomCode, setRoomCode] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [email, setEmailState] = useState(controlledEmail);
-  const [submittingCode, setSubmittingCode] = useState(false);
-  const [submittingRoomCode, setSubmittingRoomCode] = useState(null);
-
-  const canSubmit = displayName.trim().length > 0 && email.trim().length > 0;
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!canSubmit) return;
-    setSubmittingCode(true);
-    try {
-      await onJoin(roomCode.toUpperCase(), displayName.trim(), email.trim());
-    } finally {
-      setSubmittingCode(false);
-    }
-  };
-
-  const joinOpenRace = async (selectedRoomCode) => {
-    if (!canSubmit) return;
-    setSubmittingRoomCode(selectedRoomCode);
-    try {
-      await onJoin(selectedRoomCode, displayName.trim(), email.trim());
-    } finally {
-      setSubmittingRoomCode(null);
-    }
-  };
+import { Button, Card, Field, Input } from "./ui/Primitives";
 
-  const updateEmail = (nextEmail) => {
+export function StudentJoin({
+  mode = "general",
+  presetRoomCode = "",
+  presetRaceTitle = "",
+  onJoin,
+  onBack
+}) {
+  const isSpecific = mode === "specific";
+  const roomCode = presetRoomCode.toUpperCase();
 
-    setEmailState(nextEmail);
+  const submitSpecific = async (event) => {
+    event.preventDefault();
+    const name = event.currentTarget.displayName.value.trim();
+    if (!name || !roomCode) return;
+    await onJoin(roomCode, name);
+  };
 
-    onEmailChange?.(nextEmail);
+  const submitGeneral = async (event) => {
+    event.preventDefault();
+    const name = event.currentTarget.displayName.value.trim();
+    const code = event.currentTarget.roomCode.value.trim().toUpperCase();
+    if (!name || !code) return;
+    await onJoin(code, name);
+  };
 
-  };
-
-  return (
-    <Card className="centered student-join-card">
-      <p className="page-kicker">הצטרפות</p>
-      <h2>רישום תלמיד למרוץ</h2>
-      <p className="page-subtitle">בחרו מרוץ פתוח או הזינו קוד חדר. ההרשמה ממתינה לאישור המורה.</p>
-
-      <div className="stack join-form-stack">
-        <Field label="שם תלמיד">
-          <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="לדוגמה: יואב כהן" required />
-        </Field>
-        <Field label="מייל תלמיד">
-          <Input type="email" value={email} onChange={(e) => updateEmail(e.target.value)} placeholder="student@school.com" required />
-        </Field>
-
-        <div className="join-section-head">
-          <strong>מרוצים פתוחים</strong>
-          <Button variant="ghost" size="sm" onClick={onRefresh}>רענון</Button>
-        </div>
-
-        {openRaces.length === 0 ? <p className="muted">אין כרגע מרוצים פתוחים להרשמה.</p> : null}
-        <div className="open-race-list">
-          {openRaces.map((race) => (
-            <div key={race.roomCode} className="open-race-row premium-open-race">
-              <div>
-                <strong>{race.title}</strong>
-                <p className="muted">
-                  קוד: {race.roomCode} · רשומים: {race.registeredCount}/{race.maxParticipants}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                onClick={() => void joinOpenRace(race.roomCode)}
-                disabled={!canSubmit || submittingRoomCode === race.roomCode}
-              >
-                {submittingRoomCode === race.roomCode ? "נרשם..." : "הירשם"}
-              </Button>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <hr className="separator" />
-
-      <form onSubmit={submit} className="stack join-form-stack">
-        <strong>הצטרפות לפי קוד חדר</strong>
-        <Field label="קוד חדר">
-          <Input value={roomCode} onChange={(e) => setRoomCode(e.target.value)} placeholder="ABCDEF" required />
-        </Field>
-        <Button type="submit" disabled={!canSubmit || submittingCode}>
-          {submittingCode ? "נרשם..." : "הצטרף למרוץ"}
-        </Button>
+  if (isSpecific) {
+    return (
+      <Card className="centered student-join-card">
+        <p className="page-kicker">הצטרפות למרוץ</p>
+        <h2>{presetRaceTitle || "מרוץ פתוח"}</h2>
+        <p className="page-subtitle">
+          קוד חדר: <strong className="room-code-inline">{roomCode}</strong>
+          <br />
+          הזינו שם למשחק — ההרשמה ממתינה לאישור המורה.
+        </p>
+
+        <form onSubmit={submitSpecific} className="stack join-form-stack">
+          <Field label="שם במשחק">
+            <Input name="displayName" placeholder="לדוגמה: יואב כהן" autoComplete="nickname" autoFocus required />
+          </Field>
+          <div className="join-form-actions">
+            <Button type="submit">הצטרפות</Button>
+            {onBack ? (
+              <Button type="button" variant="ghost" onClick={onBack}>
+                חזרה לדשבורד
+              </Button>
+            ) : null}
+          </div>
+        </form>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="centered student-join-card">
+      <p className="page-kicker">הצטרפות כללית</p>
+      <h2>הצטרפות למרוץ</h2>
+      <p className="page-subtitle">הזינו שם למשחק וקוד חדר שקיבלתם מהמורה.</p>
+
+      <form onSubmit={submitGeneral} className="stack join-form-stack">
+        <Field label="שם במשחק">
+          <Input name="displayName" placeholder="לדוגמה: יואב כהן" autoComplete="nickname" autoFocus required />
+        </Field>
+        <Field label="קוד חדר">
+          <Input
+            name="roomCode"
+            defaultValue={presetRoomCode.toUpperCase()}
+            placeholder="ABCDEF"
+            autoCapitalize="characters"
+            required
+          />
+        </Field>
+        <div className="join-form-actions">
+          <Button type="submit">הצטרף למרוץ</Button>
+          {onBack ? (
+            <Button type="button" variant="ghost" onClick={onBack}>
+              חזרה לדשבורד
+            </Button>
+          ) : null}
+        </div>
       </form>
-    </Card>
-  );
-}
-
+    </Card>
+  );
+}

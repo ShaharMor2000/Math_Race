@@ -529,6 +529,114 @@ body {
   opacity: 0.68;
 }
 
+.auth-secondary {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-weight: 650;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.auth-secondary:hover:not(:disabled) {
+  background: var(--tab-hover-bg);
+  color: var(--color-text);
+  border-color: var(--chip-hover-border);
+}
+
+.student-home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.teacher-auth-overlay {
+  z-index: 10001;
+}
+
+.teacher-auth-dialog {
+  width: min(460px, 100%);
+  max-height: min(92vh, 720px);
+  overflow-y: auto;
+}
+
+.teacher-auth-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.teacher-auth-head h3 {
+  margin: 4px 0 0;
+  font-size: 22px;
+}
+
+.teacher-auth-form {
+  margin-top: 8px;
+}
+
+.student-current-race-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.student-code-search {
+  margin-bottom: 20px;
+  padding: 18px;
+}
+
+.student-code-search-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.student-search-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+  align-items: stretch;
+}
+
+@media (max-width: 640px) {
+  .student-search-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.student-code-search-row .field-input {
+  flex: 1;
+}
+
+.student-code-search-hint {
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+
+.room-code-inline {
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.06em;
+}
+
+.join-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.student-home .page-header {
+  margin-bottom: 20px;
+}
+
 .auth-google-button {
   min-height: 52px;
   display: flex;

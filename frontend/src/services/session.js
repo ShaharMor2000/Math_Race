@@ -4,7 +4,8 @@ const STUDENT_TOKEN_KEY = "mathrace_student_token";
 const STUDENT_PARTICIPANT_KEY = "mathrace_student_participant_id";
 const STUDENT_ROOM_KEY = "mathrace_student_room_code";
 const STUDENT_STATUS_KEY = "mathrace_student_status";
-const STUDENT_EMAIL_KEY = "mathrace_student_email";
+const STUDENT_DISPLAY_NAME_KEY = "mathrace_student_display_name";
+const GUEST_ID_KEY = "mathrace_guest_id";
 
 export const session = {
   saveTeacher(token, teacherId) {
@@ -22,13 +23,24 @@ export const session = {
     localStorage.removeItem(TEACHER_TOKEN_KEY);
     localStorage.removeItem(TEACHER_ID_KEY);
   },
-  saveStudent(token, participantId, roomCode, status, email) {
+  getOrCreateGuestId() {
+    let guestId = localStorage.getItem(GUEST_ID_KEY);
+    if (!guestId) {
+      guestId = crypto.randomUUID();
+      localStorage.setItem(GUEST_ID_KEY, guestId);
+    }
+    return guestId;
+  },
+  getGuestEmail() {
+    return `guest.${this.getOrCreateGuestId()}@mathrace.local`;
+  },
+  saveStudent(token, participantId, roomCode, status, displayName) {
     localStorage.setItem(STUDENT_TOKEN_KEY, token);
     localStorage.setItem(STUDENT_PARTICIPANT_KEY, String(participantId));
     localStorage.setItem(STUDENT_ROOM_KEY, roomCode);
     localStorage.setItem(STUDENT_STATUS_KEY, status);
-    if (email) {
-      localStorage.setItem(STUDENT_EMAIL_KEY, email);
+    if (displayName) {
+      localStorage.setItem(STUDENT_DISPLAY_NAME_KEY, displayName);
     }
   },
   getStudentToken() {
@@ -44,17 +56,14 @@ export const session = {
   getStudentStatus() {
     return localStorage.getItem(STUDENT_STATUS_KEY);
   },
-  getStudentEmail() {
-    return localStorage.getItem(STUDENT_EMAIL_KEY);
-  },
-  saveStudentEmail(email) {
-    localStorage.setItem(STUDENT_EMAIL_KEY, email);
+  getStudentDisplayName() {
+    return localStorage.getItem(STUDENT_DISPLAY_NAME_KEY) || "";
   },
   clearStudent() {
     localStorage.removeItem(STUDENT_TOKEN_KEY);
     localStorage.removeItem(STUDENT_PARTICIPANT_KEY);
     localStorage.removeItem(STUDENT_ROOM_KEY);
     localStorage.removeItem(STUDENT_STATUS_KEY);
-    localStorage.removeItem(STUDENT_EMAIL_KEY);
+    localStorage.removeItem(STUDENT_DISPLAY_NAME_KEY);
   }
 };

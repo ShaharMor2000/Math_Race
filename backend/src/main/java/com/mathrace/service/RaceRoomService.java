@@ -106,7 +106,7 @@ public class RaceRoomService {
     @Transactional
     public JoinRaceResponse joinRace(JoinRaceRequest request) {
         RaceRoom room = getByRoomCodeOrThrow(request.roomCode());
-        String normalizedEmail = request.email().trim();
+        String normalizedEmail = resolveStudentEmail(request.email());
 
         RaceParticipant existingParticipant = raceParticipantRepository
             .findByRaceRoomAndStudent_EmailIgnoreCase(room, normalizedEmail)
@@ -504,6 +504,13 @@ public class RaceRoomService {
             return finalRankFor(rows, index - 1);
         }
         return index + 1;
+    }
+
+    private String resolveStudentEmail(String email) {
+        if (email != null && !email.isBlank()) {
+            return email.trim().toLowerCase(Locale.ROOT);
+        }
+        return "guest." + UUID.randomUUID() + "@mathrace.local";
     }
 
     private String displayNameFromEmail(String email) {

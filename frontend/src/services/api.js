@@ -125,10 +125,14 @@ export const api = {
       method: "DELETE"
     }),
 
-  joinRace: (roomCode, displayName, email) =>
+  joinRace: (roomCode, displayName) =>
     request("/student/join", {
       method: "POST",
-      body: JSON.stringify({ roomCode, displayName, email }),
+      body: JSON.stringify({
+        roomCode,
+        displayName,
+        email: session.getGuestEmail()
+      }),
       useTeacherAuth: false
     }),
 

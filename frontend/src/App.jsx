@@ -3,11 +3,12 @@ import { useParams } from "react-router-dom";
 import { CreateRace } from "./components/CreateRace";
 import { FinalResults } from "./components/FinalResults";
 import { LiveRaceDashboard } from "./components/LiveRaceDashboard";
-import { FloatingNumbersBackground, LoginPage } from "./components/LoginPage";
+import { FloatingNumbersBackground } from "./components/FloatingNumbersBackground";
 import { RaceLobby } from "./components/RaceLobby";
 import { StudentDashboard } from "./components/StudentDashboard";
 import { StudentJoin } from "./components/StudentJoin";
 import { StudentRaceScreen } from "./components/StudentRaceScreen";
+import { TeacherAuthModal } from "./components/TeacherAuthModal";
 import { TeacherDashboard } from "./components/TeacherDashboard";
 import { Toast } from "./components/Toast";
 import { AppChrome, Button, ConfirmDialog } from "./components/ui/Primitives";
@@ -18,7 +19,7 @@ import { session } from "./services/session";
 function App() {
   const { roomCode: joinRoomCode } = useParams();
   const [theme, setTheme] = useState(() => localStorage.getItem("mathRaceTheme") || "dark");
-  const [role, setRole] = useState(joinRoomCode ? "student" : "teacher");
+  const [role, setRole] = useState(() => (session.getTeacherId() ? "teacher" : "student"));
   const [teacherId, setTeacherId] = useState(session.getTeacherId());
   const [rooms, setRooms] = useState([]);
   const [isCreatingRace, setIsCreatingRace] = useState(false);
@@ -36,10 +37,10 @@ function App() {
   const [openingRoomCode, setOpeningRoomCode] = useState(null);
 
   const [studentRoomCode, setStudentRoomCode] = useState(session.getStudentRoomCode());
-  const [studentEmail, setStudentEmail] = useState(session.getStudentEmail());
-  const [studentJoinEmail, setStudentJoinEmail] = useState("");
+  const [studentDisplayName, setStudentDisplayName] = useState(session.getStudentDisplayName());
   const [studentParticipantId, setStudentParticipantId] = useState(session.getStudentParticipantId());
   const [studentParticipantStatus, setStudentParticipantStatus] = useState(session.getStudentStatus());
+  const [studentRoomStatus, setStudentRoomStatus] = useState(null);
   const [studentProgress, setStudentProgress] = useState(0);
   const [studentScore, setStudentScore] = useState(0);
   const [studentQuestion, setStudentQuestion] = useState(null);
@@ -48,15 +49,17 @@ function App() {
   const [studentFinalRows, setStudentFinalRows] = useState(null);
   const [studentWinnerName, setStudentWinnerName] = useState(null);
   const [openRaces, setOpenRaces] = useState([]);
-  const [answerFeedback, setAnswerFeedback] = useState(null);
-  const [studentRaces, setStudentRaces] = useState([]);
-  const [studentDashboardLoading, setStudentDashboardLoading] = useState(false);
-  const [studentDashboardError, setStudentDashboardError] = useState("");
+  const [openRacesLoading, setOpenRacesLoading] = useState(false);
+  const [openRacesError, setOpenRacesError] = useState("");
   const [studentView, setStudentView] = useState("dashboard");
+  const [joinMode, setJoinMode] = useState("general");
+  const [joinPreset, setJoinPreset] = useState(null);
+  const [answerFeedback, setAnswerFeedback] = useState(null);
   const [studentRacePaused, setStudentRacePaused] = useState(false);
   const [toast, setToast] = useState(null);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [pendingLogout, setPendingLogout] = useState(null);
+  const [teacherAuthOpen, setTeacherAuthOpen] = useState(false);
 
   const showToast = useCallback((message, type = "error") => {
     if (!message) return;
@@ -102,14 +105,24 @@ function App() {
   }, [teacherId, role]);
 
   useEffect(() => {
-    if (role !== "student" || !studentEmail || studentRoomCode) return;
-    void refreshOpenRaces().catch((error) => showToast(error.message));
-  }, [role, studentEmail, studentRoomCode, showToast]);
+    if (!session.getStudentRoomCode()) return;
+    setRole("student");
+    setStudentView("race");
+  }, []);
 
   useEffect(() => {
-    if (role !== "student" || !studentEmail) return;
-    void refreshStudentDashboard(studentEmail);
-  }, [role, studentEmail]);
+    void refreshOpenRaces().catch((error) => showToast(error.message));
+    if (joinRoomCode) {
+      setJoinMode("specific");
+      setJoinPreset({ roomCode: joinRoomCode.toUpperCase(), title: "מרוץ" });
+      setStudentView("join");
+    }
+  }, [joinRoomCode, showToast]);
+
+  useEffect(() => {
+    if (role !== "student" || studentRoomCode) return;
+    void refreshOpenRaces().catch((error) => showToast(error.message));
+  }, [role, studentRoomCode, showToast]);
 
   const pushTeacherEvent = useCallback((type, message) => {
     if (!message) return;
@@ -141,17 +154,14 @@ function App() {
 
   useEffect(() => {
     if (role !== "student" || !studentRoomCode || studentParticipantStatus !== "ACTIVE") return;
-    const activeRace = studentRaces.find(
-      (race) => race.roomCode === studentRoomCode && (race.raceStatus === "RUNNING" || race.raceStatus === "PAUSED")
-    );
-    if (activeRace) {
+    if (studentRoomStatus === "RUNNING" || studentRoomStatus === "PAUSED") {
       setStudentView("race");
-      setStudentRacePaused(activeRace.raceStatus === "PAUSED");
-      if (activeRace.raceStatus === "RUNNING" && !studentQuestion) {
+      setStudentRacePaused(studentRoomStatus === "PAUSED");
+      if (studentRoomStatus === "RUNNING" && !studentQuestion) {
         void fetchNextQuestion(studentRoomCode);
       }
     }
-  }, [role, studentRoomCode, studentParticipantStatus, studentRaces, studentQuestion, fetchNextQuestion]);
+  }, [role, studentRoomCode, studentParticipantStatus, studentRoomStatus, studentQuestion, fetchNextQuestion]);
 
   useEffect(() => {
     if (!studentRoomCode || !studentParticipantId || studentParticipantStatus !== "ACTIVE") return;
@@ -173,6 +183,8 @@ function App() {
     const response = await api.teacherLogin(email, password);
     session.saveTeacher(response.accessToken, response.teacher.id);
     setTeacherId(response.teacher.id);
+    setRole("teacher");
+    setTeacherAuthOpen(false);
   };
 
   const handleTeacherRegister = async (fullName, email, password) => {
@@ -184,35 +196,68 @@ function App() {
     const response = await api.teacherGoogleLogin(idToken);
     session.saveTeacher(response.accessToken, response.teacher.id);
     setTeacherId(response.teacher.id);
+    setRole("teacher");
+    setTeacherAuthOpen(false);
   };
 
   const refreshOpenRaces = async () => {
-    const races = await api.listOpenRaces();
-    setOpenRaces(races);
-  };
-
-  const refreshStudentDashboard = async (email = studentEmail) => {
-    if (!email) return;
-    setStudentDashboardLoading(true);
-    setStudentDashboardError("");
+    setOpenRacesLoading(true);
+    setOpenRacesError("");
     try {
-      const [races, availableRaces] = await Promise.all([api.listStudentRaces(email), api.listOpenRaces()]);
-      setStudentRaces(races);
-      setOpenRaces(availableRaces);
+      const races = await api.listOpenRaces();
+      setOpenRaces(races);
     } catch (error) {
-      setStudentDashboardError(error.message || "לא ניתן לטעון את דשבורד התלמיד.");
+      setOpenRacesError(error.message || "לא ניתן לטעון מרוצים פתוחים.");
+      throw error;
     } finally {
-      setStudentDashboardLoading(false);
+      setOpenRacesLoading(false);
     }
   };
 
-  const handleStudentDashboardLogin = async (email) => {
-    const normalizedEmail = email.trim();
-    session.saveStudentEmail(normalizedEmail);
-    setStudentEmail(normalizedEmail);
-    setStudentJoinEmail(normalizedEmail);
+  const openGeneralJoin = (initialRoomCode = "") => {
+    setJoinMode("general");
+    setJoinPreset(initialRoomCode ? { roomCode: initialRoomCode.toUpperCase(), title: "" } : null);
+    setStudentView("join");
+  };
+
+  const openSpecificJoin = (roomCode, title = "מרוץ") => {
+    setJoinMode("specific");
+    setJoinPreset({ roomCode: roomCode.toUpperCase(), title });
+    setStudentView("join");
+  };
+
+  const backToStudentDashboard = () => {
     setStudentView("dashboard");
-    await refreshStudentDashboard(normalizedEmail);
+    setJoinPreset(null);
+  };
+
+  const handleStudentJoin = async (roomCode, displayName) => {
+    const res = await runAction(() => api.joinRace(roomCode, displayName), "נרשמת בהצלחה");
+    session.saveStudent(
+      res.studentToken,
+      res.participant.participantId,
+      res.room.roomCode,
+      res.participant.participantStatus,
+      displayName
+    );
+    setRole("student");
+    setStudentDisplayName(displayName);
+    setStudentRoomCode(res.room.roomCode);
+    setStudentParticipantId(res.participant.participantId);
+    setStudentParticipantStatus(res.participant.participantStatus);
+    setStudentRoomStatus(res.room.status);
+    await refreshOpenRaces();
+
+    const isActiveInRunningRace =
+      res.room.status === "RUNNING" && res.participant.participantStatus === "ACTIVE";
+    setStudentView(isActiveInRunningRace ? "race" : "race");
+    setStudentRacePaused(res.room.status === "PAUSED");
+    setStudentEventMessage(
+      res.participant.participantStatus === "PENDING" ? "נרשמת בהצלחה. ממתין לאישור מורה..." : null
+    );
+    if (isActiveInRunningRace) {
+      await fetchNextQuestion(res.room.roomCode);
+    }
   };
 
   const handleCreateRace = async (payload) => {
@@ -307,33 +352,6 @@ function App() {
       setTeacherFinalRows(results.leaderboard);
       setTeacherWinnerName(results.winnerName);
     }, "המרוץ הסתיים");
-  };
-
-  const handleStudentJoin = async (roomCode, displayName, email) => {
-    const res = await runAction(() => api.joinRace(roomCode, displayName, email), "נרשמת בהצלחה");
-    session.saveStudent(
-      res.studentToken,
-      res.participant.participantId,
-      res.room.roomCode,
-      res.participant.participantStatus,
-      email
-    );
-    setStudentEmail(email);
-    setStudentRoomCode(res.room.roomCode);
-    setStudentParticipantId(res.participant.participantId);
-    setStudentParticipantStatus(res.participant.participantStatus);
-    await refreshStudentDashboard(email);
-
-    const isActiveInRunningRace =
-      res.room.status === "RUNNING" && res.participant.participantStatus === "ACTIVE";
-    setStudentView(isActiveInRunningRace ? "race" : "dashboard");
-    setStudentRacePaused(res.room.status === "PAUSED");
-    setStudentEventMessage(
-      res.participant.participantStatus === "PENDING" ? "נרשמת בהצלחה. ממתין לאישור מורה..." : null
-    );
-    if (isActiveInRunningRace) {
-      await fetchNextQuestion(res.room.roomCode);
-    }
   };
 
   const approveParticipant = async (participantId) => {
@@ -432,6 +450,7 @@ function App() {
   const logoutTeacher = () => {
     session.clearTeacher();
     setTeacherId(null);
+    setRole("student");
     resetTeacherFlow();
   };
 
@@ -466,25 +485,27 @@ function App() {
     setIsEditingRace(false);
   };
 
-  const resetStudentFlow = () => {
+  const leaveStudentRace = () => {
     session.clearStudent();
-    setStudentEmail(null);
-    setStudentJoinEmail("");
-    setStudentFinalRows(null);
-    setStudentWinnerName(null);
+    setStudentDisplayName("");
     setStudentRoomCode(null);
     setStudentParticipantId(null);
     setStudentParticipantStatus(null);
+    setStudentRoomStatus(null);
     setStudentQuestion(null);
     setStudentProgress(0);
     setStudentScore(0);
     setPendingPathDecision(false);
     setStudentEventMessage(null);
-    setStudentRaces([]);
-    setStudentDashboardError("");
+    setStudentFinalRows(null);
+    setStudentWinnerName(null);
     setStudentView("dashboard");
     setStudentRacePaused(false);
     void refreshOpenRaces();
+  };
+
+  const resetStudentFlow = () => {
+    leaveStudentRace();
   };
 
   const teacherRoomStatus = roomMeta?.status;
@@ -542,12 +563,16 @@ function App() {
       }
       if (studentParticipantId && Number(payload.participantId) === studentParticipantId) {
         setStudentParticipantStatus("ACTIVE");
-        session.saveStudent(session.getStudentToken(), studentParticipantId, studentRoomCode, "ACTIVE", studentEmail);
-        void refreshStudentDashboard(studentEmail).then(() => {
-          if (studentRoomCode && !studentQuestion) {
-            void fetchNextQuestion(studentRoomCode);
-          }
-        });
+        session.saveStudent(
+          session.getStudentToken(),
+          studentParticipantId,
+          studentRoomCode,
+          "ACTIVE",
+          studentDisplayName
+        );
+        if (studentRoomCode && !studentQuestion) {
+          void fetchNextQuestion(studentRoomCode);
+        }
         setStudentEventMessage("אושרת למרוץ!");
         setStudentView("race");
       }
@@ -563,6 +588,7 @@ function App() {
     }
     if (event.type === "race_started") {
       if (role === "teacher") pushTeacherEvent("race_started", "המרוץ התחיל!");
+      if (role === "student") setStudentRoomStatus("RUNNING");
       if (studentRoomCode && studentParticipantId && studentParticipantStatus === "ACTIVE") {
         setStudentRacePaused(false);
         setStudentView("race");
@@ -571,11 +597,15 @@ function App() {
     }
     if (event.type === "race_paused") {
       if (activeRoomCode) void loadRoomDetails(activeRoomCode);
-      if (role === "student") setStudentRacePaused(true);
+      if (role === "student") {
+        setStudentRoomStatus("PAUSED");
+        setStudentRacePaused(true);
+      }
     }
     if (event.type === "race_resumed") {
       if (activeRoomCode) void loadRoomDetails(activeRoomCode);
       if (role === "student") {
+        setStudentRoomStatus("RUNNING");
         setStudentRacePaused(false);
         if (studentRoomCode && studentParticipantId && studentParticipantStatus === "ACTIVE") {
           void fetchNextQuestion(studentRoomCode);
@@ -596,36 +626,16 @@ function App() {
     }
   };
 
-  const isLoginScreen =
-    (role === "teacher" && !teacherId) || (role === "student" && !studentEmail && !studentRoomCode);
-
-  if (isLoginScreen) {
-    return (
-      <main className="auth-app">
-        <Toast message={toast?.message} type={toast?.type} onClose={() => setToast(null)} />
-        <button type="button" className="theme-toggle" onClick={toggleTheme} aria-label="החלפת מצב תצוגה">
-          {theme === "dark" ? "☀️ בהיר" : "🌙 כהה"}
-        </button>
-        <LoginPage
-          activeRole={role}
-          theme={theme}
-          initialRoomCode={joinRoomCode || ""}
-          openRaces={openRaces}
-          onRoleChange={setRole}
-          onTeacherLogin={handleTeacherLogin}
-          onTeacherRegister={handleTeacherRegister}
-          onGoogleLogin={handleTeacherGoogleLogin}
-          onStudentJoin={handleStudentJoin}
-          onStudentDashboardLogin={handleStudentDashboardLogin}
-          onRefreshOpenRaces={refreshOpenRaces}
-        />
-      </main>
-    );
-  }
-
   return (
     <main className="app-shell" dir="rtl">
       <Toast message={toast?.message} type={toast?.type} onClose={() => setToast(null)} />
+      <TeacherAuthModal
+        open={teacherAuthOpen}
+        onClose={() => setTeacherAuthOpen(false)}
+        onTeacherLogin={handleTeacherLogin}
+        onTeacherRegister={handleTeacherRegister}
+        onGoogleLogin={handleTeacherGoogleLogin}
+      />
       <ConfirmDialog
         open={logoutConfirmOpen}
         title="התנתקות"
@@ -646,63 +656,43 @@ function App() {
           onToggleTheme={toggleTheme}
           actions={
             <>
-              {role === "student" && studentView === "join" && !studentRoomCode ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={!studentJoinEmail.trim()}
-                  onClick={() => void handleStudentDashboardLogin(studentJoinEmail)}
-                >
+              {role === "student" && studentView === "join" ? (
+                <Button variant="ghost" size="sm" onClick={backToStudentDashboard}>
                   בחזרה לדשבורד
                 </Button>
               ) : null}
-              {!teacherId && !studentEmail ? (
-                <div className="app-role-tabs">
-                  <button
-                    type="button"
-                    className={role === "teacher" ? "app-role-tab active" : "app-role-tab"}
-                    onClick={() => setRole("teacher")}
-                  >
-                    מורה
-                  </button>
-                  <button
-                    type="button"
-                    className={role === "student" ? "app-role-tab active" : "app-role-tab"}
-                    onClick={() => setRole("student")}
-                  >
-                    תלמיד
-                  </button>
-                </div>
-              ) : null}
               {teacherId ? (
-                <Button variant="ghost" size="sm" onClick={() => requestLogout("teacher")}>
-                  יציאה
+                <>
+                  {role === "teacher" ? (
+                    <Button variant="ghost" size="sm" onClick={() => setRole("student")}>
+                      מסך תלמידים
+                    </Button>
+                  ) : (
+                    <Button variant="ghost" size="sm" onClick={() => setRole("teacher")}>
+                      לוח מורה
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => requestLogout("teacher")}>
+                    יציאת מורה
+                  </Button>
+                </>
+              ) : (
+                <Button variant="primary" size="sm" onClick={() => setTeacherAuthOpen(true)}>
+                  התחברות / הרשמה — מורה
                 </Button>
-              ) : null}
-              {studentEmail && !teacherId && studentView !== "dashboard" ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setStudentView("dashboard");
-                    void refreshStudentDashboard(studentEmail);
-                  }}
-                >
+              )}
+              {role === "student" && studentView !== "dashboard" && !studentFinalRows ? (
+                <Button variant="ghost" size="sm" onClick={() => setStudentView("dashboard")}>
                   חזרה
-                </Button>
-              ) : null}
-              {studentEmail && !teacherId ? (
-                <Button variant="ghost" size="sm" onClick={() => requestLogout("student")}>
-                  יציאה
                 </Button>
               ) : null}
             </>
           }
         />
 
-      {role === "teacher" ? (
+      {role === "teacher" && teacherId ? (
         <>
-          {teacherId && !isCreatingRace && !isEditingRace && !activeRoomCode && !teacherFinalRows ? (
+          {!isCreatingRace && !isEditingRace && !activeRoomCode && !teacherFinalRows ? (
             <TeacherDashboard
               rooms={rooms}
               lastCreatedRoomCode={lastCreatedRoomCode}
@@ -713,11 +703,11 @@ function App() {
             />
           ) : null}
 
-          {teacherId && isCreatingRace ? (
+          {isCreatingRace ? (
             <CreateRace onSubmit={handleCreateRace} onCancel={() => setIsCreatingRace(false)} />
           ) : null}
 
-          {teacherId && isEditingRace && roomMeta ? (
+          {isEditingRace && roomMeta ? (
             <CreateRace
               mode="edit"
               initialValues={roomMeta}
@@ -764,64 +754,35 @@ function App() {
         </>
       ) : (
         <>
-          {!studentRoomCode && studentView === "join" ? (
+          {studentView === "join" ? (
             <StudentJoin
-              openRaces={openRaces}
+              mode={joinMode}
+              presetRoomCode={joinPreset?.roomCode || joinRoomCode || ""}
+              presetRaceTitle={joinPreset?.title || ""}
               onJoin={handleStudentJoin}
-              onRefresh={refreshOpenRaces}
-              email={studentJoinEmail}
-              onEmailChange={setStudentJoinEmail}
+              onBack={backToStudentDashboard}
             />
           ) : null}
-          {studentEmail && studentView === "dashboard" ? (
+          {studentView === "dashboard" && !studentFinalRows ? (
             <StudentDashboard
-              email={studentEmail}
-              races={studentRaces}
+              displayName={studentDisplayName}
               openRaces={openRaces}
-              loading={studentDashboardLoading}
-              errorMessage={studentDashboardError}
+              loading={openRacesLoading}
+              errorMessage={openRacesError}
               activeRoomCode={studentRoomCode}
               activeParticipantStatus={studentParticipantStatus}
-              onRefresh={() => void refreshStudentDashboard()}
-              onJoinOpenRace={() => {
-                setStudentJoinEmail(studentEmail || "");
-                setStudentView("join");
-                void refreshOpenRaces();
-              }}
-              onEnterRace={async (roomCode) => {
-                const targetRoomCode = roomCode || studentRoomCode;
-                if (!targetRoomCode || !studentEmail) return;
-                const displayName = studentEmail.split("@")[0] || "Student";
-                const res = await api.joinRace(targetRoomCode, displayName, studentEmail);
-                session.saveStudent(
-                  res.studentToken,
-                  res.participant.participantId,
-                  res.room.roomCode,
-                  res.participant.participantStatus,
-                  studentEmail
-                );
-                setStudentRoomCode(res.room.roomCode);
-                setStudentParticipantId(res.participant.participantId);
-                setStudentParticipantStatus(res.participant.participantStatus);
-                setStudentView("race");
-                setStudentRacePaused(res.room.status === "PAUSED");
-                if (res.room.status === "RUNNING") {
-                  await fetchNextQuestion(res.room.roomCode);
+              onRefresh={() => void refreshOpenRaces()}
+              onJoinGeneral={() => openGeneralJoin()}
+              onJoinSpecific={openSpecificJoin}
+              onEnterRace={() => {
+                if (studentParticipantStatus === "ACTIVE") {
+                  setStudentView("race");
+                  if (studentRoomCode && !studentQuestion) {
+                    void fetchNextQuestion(studentRoomCode);
+                  }
                 }
               }}
-              onFindRace={() => {
-                const email = studentEmail;
-                session.clearStudent();
-                if (email) session.saveStudentEmail(email);
-                setStudentJoinEmail(email || "");
-                setStudentRoomCode(null);
-                setStudentParticipantId(null);
-                setStudentParticipantStatus(null);
-                setStudentQuestion(null);
-                setStudentView("join");
-                void refreshOpenRaces();
-              }}
-              onLogout={() => requestLogout("student")}
+              onLeaveRace={studentRoomCode ? leaveStudentRace : undefined}
             />
           ) : null}
           {studentRoomCode && studentView === "race" && studentParticipantStatus === "PENDING" && !studentFinalRows ? (
@@ -835,7 +796,7 @@ function App() {
           {studentRoomCode && studentView === "race" && studentParticipantStatus === "ACTIVE" && !studentFinalRows ? (
             <StudentRaceScreen
               roomCode={studentRoomCode}
-              raceStatus={studentRaces.find((race) => race.roomCode === studentRoomCode)?.raceStatus}
+              raceStatus={studentRoomStatus}
               progress={studentProgress}
               score={studentScore}
               question={studentQuestion}
