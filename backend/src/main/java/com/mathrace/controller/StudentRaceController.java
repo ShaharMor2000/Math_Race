@@ -53,6 +53,18 @@ public class StudentRaceController {
         return raceRoomService.joinRace(request);
     }
 
+    @PostMapping("/races/{roomCode}/leave")
+    public Map<String, Object> leaveRace(HttpServletRequest request, @PathVariable String roomCode) {
+        AuthPrincipal principal = AuthSupport.requireStudent(request);
+        ensureStudentInRoom(principal, roomCode);
+        raceRoomService.leaveRaceAsStudent(roomCode, principal.participantId());
+        return Map.of(
+            "roomCode", roomCode.toUpperCase(),
+            "participantId", principal.participantId(),
+            "participantStatus", "LEFT"
+        );
+    }
+
     @GetMapping("/races/{roomCode}/question")
     public QuestionResponse nextQuestion(HttpServletRequest request, @PathVariable String roomCode) {
         AuthPrincipal principal = AuthSupport.requireStudent(request);
@@ -96,14 +108,14 @@ public class StudentRaceController {
     private void ensureStudentInRoom(AuthPrincipal principal, String roomCode) {
         RaceRoom room = raceRoomService.getByRoomCodeOrThrow(roomCode);
         if (principal.roomId() != null && !principal.roomId().equals(room.getId())) {
-            throw new ApiException("FORBIDDEN", "Student token does not match room");
+            throw new ApiException("FORBIDDEN", "טוקן התלמיד אינו תואם לחדר");
         }
         RaceParticipant participant = raceRoomService.getRoomParticipants(roomCode).stream()
             .filter(p -> p.getId().equals(principal.participantId()))
             .findFirst()
-            .orElseThrow(() -> new ApiException("PARTICIPANT_NOT_IN_ROOM", "Participant not in room"));
+            .orElseThrow(() -> new ApiException("PARTICIPANT_NOT_IN_ROOM", "המשתתף אינו בחדר"));
         if (!participant.getRaceRoom().getId().equals(room.getId())) {
-            throw new ApiException("PARTICIPANT_NOT_IN_ROOM", "Participant not in room");
+            throw new ApiException("PARTICIPANT_NOT_IN_ROOM", "המשתתף אינו בחדר");
         }
     }
 }

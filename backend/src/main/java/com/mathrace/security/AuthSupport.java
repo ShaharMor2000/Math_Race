@@ -12,13 +12,13 @@ public final class AuthSupport {
         if (value instanceof AuthPrincipal principal) {
             return principal;
         }
-        throw new ApiException("UNAUTHORIZED", "Valid authentication token required");
+        throw new ApiException("UNAUTHORIZED", "נדרש טוקן אימות תקף");
     }
 
     public static AuthPrincipal requireTeacher(HttpServletRequest request) {
         AuthPrincipal principal = requirePrincipal(request);
         if (!principal.isTeacher() || principal.teacherId() == null) {
-            throw new ApiException("FORBIDDEN", "Teacher authentication required");
+            throw new ApiException("FORBIDDEN", "נדרשת התחברות מורה");
         }
         return principal;
     }
@@ -26,7 +26,7 @@ public final class AuthSupport {
     public static AuthPrincipal requireStudent(HttpServletRequest request) {
         AuthPrincipal principal = requirePrincipal(request);
         if (!principal.isStudent() || principal.participantId() == null) {
-            throw new ApiException("FORBIDDEN", "Student authentication required");
+            throw new ApiException("FORBIDDEN", "נדרשת התחברות תלמיד");
         }
         return principal;
     }

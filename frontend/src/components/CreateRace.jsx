@@ -214,7 +214,7 @@ export function CreateRace({ mode = "create", initialValues = {}, onSubmit, onCa
                   <span>משתתפים מקסימלי</span>
                   <strong>{maxParticipants === null ? "לא נבחר" : maxParticipants}</strong>
                 </span>
-                <input type="range" min={1} max={8} value={maxParticipants ?? 1} onChange={(event) => {
+                <input type="range" min={1} max={8} value={maxParticipants ?? 8} onChange={(event) => {
                   setStepError("");
                   setMaxParticipants(Number(event.target.value));
                 }} />

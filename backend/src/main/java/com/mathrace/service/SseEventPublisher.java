@@ -2,9 +2,10 @@ package com.mathrace.service;
 
 import com.mathrace.dto.stream.StreamEventDto;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +45,30 @@ public class SseEventPublisher {
         }
     }
 
+    /** Publish only after DB commit so clients that refresh don't see stale rows. */
+    public void publishAfterCommit(String roomCode, String eventType, Map<String, Object> payload) {
+        publishAfterCommit(roomCode, eventType, payload, null);
+    }
+
+    public void publishAfterCommit(
+        String roomCode,
+        String eventType,
+        Map<String, Object> payload,
+        Long targetParticipantId
+    ) {
+        Runnable publishAction = () -> publish(roomCode, eventType, payload, targetParticipantId);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    publishAction.run();
+                }
+            });
+        } else {
+            publishAction.run();
+        }
+    }
+
     private boolean shouldDeliver(
         Subscriber subscriber,
         String eventType,
@@ -63,7 +88,7 @@ public class SseEventPublisher {
 
         if ("STUDENT".equalsIgnoreCase(subscriber.role())) {
             return switch (eventType) {
-                case "question_ready", "registration_approved", "registration_rejected" -> {
+                case "question_ready", "registration_approved", "registration_rejected", "registration_cancelled" -> {
                     Object payloadParticipantId = payload.get("participantId");
                     yield payloadParticipantId == null || subscriber.participantId() == null
                         || subscriber.participantId().equals(toLong(payloadParticipantId));
@@ -84,8 +109,12 @@ public class SseEventPublisher {
     private void send(SseEmitter emitter, String eventType, StreamEventDto dto) {
         try {
             emitter.send(SseEmitter.event().name(eventType).data(dto));
-        } catch (IOException | IllegalStateException e) {
-            emitter.completeWithError(e);
+        } catch (Exception e) {
+            try {
+                emitter.completeWithError(e);
+            } catch (Exception ignored) {
+                // Emitter may already be completed; never fail the business request because of SSE.
+            }
         }
     }
 

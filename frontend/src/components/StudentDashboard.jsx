@@ -122,7 +122,7 @@ export function StudentDashboard({
             </Button>
             {onLeaveRace ? (
               <Button variant="ghost" onClick={onLeaveRace}>
-                עזיבת מרוץ
+                ביטול הרשמה
               </Button>
             ) : null}
           </div>
@@ -146,19 +146,27 @@ export function StudentDashboard({
         ) : null}
 
         <div className="open-race-list">
-          {filteredRaces.map((race) => (
-            <Card key={race.roomCode} className="open-race-row premium-open-race">
-              <div>
-                <h3>{race.title}</h3>
-                <p className="muted">
-                  קוד: {race.roomCode} · רשומים: {race.registeredCount}/{race.maxParticipants}
-                </p>
-              </div>
-              <Button size="sm" onClick={() => onJoinSpecific?.(race.roomCode, race.title)}>
-                הצטרפות
-              </Button>
-            </Card>
-          ))}
+          {filteredRaces.map((race) => {
+            const isFull = Number(race.registeredCount) >= Number(race.maxParticipants);
+            return (
+              <Card key={race.roomCode} className="open-race-row premium-open-race">
+                <div>
+                  <h3>{race.title}</h3>
+                  <p className="muted">
+                    קוד: {race.roomCode} · רשומים: {race.registeredCount}/{race.maxParticipants}
+                    {isFull ? " · מלא" : ""}
+                  </p>
+                </div>
+                {isFull ? (
+                  <Badge variant="warning">מלא</Badge>
+                ) : (
+                  <Button size="sm" onClick={() => onJoinSpecific?.(race.roomCode, race.title)}>
+                    הצטרפות
+                  </Button>
+                )}
+              </Card>
+            );
+          })}
         </div>
       </div>
 

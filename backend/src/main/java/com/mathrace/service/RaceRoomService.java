@@ -52,7 +52,7 @@ public class RaceRoomService {
     @Transactional
     public CreateRaceResponse createRace(Long teacherId, CreateRaceRequest request) {
         Teacher teacher = teacherRepository.findById(teacherId)
-            .orElseThrow(() -> new ApiException("TEACHER_NOT_FOUND", "Teacher not found"));
+            .orElseThrow(() -> new ApiException("TEACHER_NOT_FOUND", "המורה לא נמצא"));
 
         RaceRoom room = new RaceRoom();
         room.setTeacher(teacher);
@@ -74,32 +74,36 @@ public class RaceRoomService {
     @Transactional(readOnly = true)
     public List<RoomSummaryResponse> listTeacherRooms(Long teacherId) {
         Teacher teacher = teacherRepository.findById(teacherId)
-            .orElseThrow(() -> new ApiException("TEACHER_NOT_FOUND", "Teacher not found"));
+            .orElseThrow(() -> new ApiException("TEACHER_NOT_FOUND", "המורה לא נמצא"));
 
         return raceRoomRepository.findByTeacherOrderByCreatedAtDesc(teacher).stream()
-            .map(room -> new RoomSummaryResponse(
-                room.getId(),
-                room.getRoomCode(),
-                room.getTitle(),
-                room.getStatus(),
-                raceParticipantRepository.countByRaceRoom(room),
-                raceParticipantRepository.countByRaceRoomAndParticipantStatus(room, ParticipantStatus.PENDING),
-                raceParticipantRepository.countByRaceRoomAndParticipantStatus(room, ParticipantStatus.ACTIVE),
-                room.getCreatedAt()
-            ))
+            .map(room -> {
+                long pending = raceParticipantRepository.countByRaceRoomAndParticipantStatus(room, ParticipantStatus.PENDING);
+                long approved = raceParticipantRepository.countByRaceRoomAndParticipantStatus(room, ParticipantStatus.ACTIVE);
+                return new RoomSummaryResponse(
+                    room.getId(),
+                    room.getRoomCode(),
+                    room.getTitle(),
+                    room.getStatus(),
+                    pending + approved,
+                    pending,
+                    approved,
+                    room.getCreatedAt()
+                );
+            })
             .toList();
     }
 
     @Transactional(readOnly = true)
     public RaceRoom getByRoomCodeOrThrow(String roomCode) {
         return raceRoomRepository.findByRoomCode(roomCode.trim().toUpperCase(Locale.ROOT))
-            .orElseThrow(() -> new ApiException("ROOM_NOT_FOUND", "Room not found"));
+            .orElseThrow(() -> new ApiException("ROOM_NOT_FOUND", "החדר לא נמצא"));
     }
 
     @Transactional(readOnly = true)
     public void ensureTeacherOwnsRoom(Long teacherId, RaceRoom room) {
         if (!room.getTeacher().getId().equals(teacherId)) {
-            throw new ApiException("FORBIDDEN", "Teacher does not own this room");
+            throw new ApiException("FORBIDDEN", "המורה אינו בעל החדר");
         }
     }
 
@@ -112,6 +116,36 @@ public class RaceRoomService {
             .findByRaceRoomAndStudent_EmailIgnoreCase(room, normalizedEmail)
             .orElse(null);
         if (existingParticipant != null) {
+            if (existingParticipant.getParticipantStatus() == ParticipantStatus.LEFT
+                && (room.getStatus() == RaceRoomStatus.LOBBY || room.getStatus() == RaceRoomStatus.LOCKED)) {
+                if (countRegisteredParticipants(room) >= room.getMaxParticipants()) {
+                    throw new ApiException("ROOM_FULL", "החדר מלא");
+                }
+                existingParticipant.setParticipantStatus(ParticipantStatus.PENDING);
+                if (request.displayName() != null && !request.displayName().isBlank()) {
+                    existingParticipant.getStudent().setDisplayName(request.displayName().trim());
+                }
+                raceParticipantRepository.save(existingParticipant);
+                maybeLockRoom(room);
+                String studentToken = jwtService.issueStudentToken(existingParticipant.getId(), room.getId());
+                Student student = existingParticipant.getStudent();
+                sseEventPublisher.publishAfterCommit(room.getRoomCode(), "registration_requested", java.util.Map.of(
+                    "participantId", existingParticipant.getId(),
+                    "displayName", student.getDisplayName(),
+                    "laneNo", existingParticipant.getLaneNo()
+                ));
+                return new JoinRaceResponse(
+                    studentToken,
+                    new JoinRaceResponse.StudentData(student.getId(), student.getDisplayName()),
+                    new JoinRaceResponse.ParticipantData(
+                        existingParticipant.getId(),
+                        existingParticipant.getLaneNo(),
+                        existingParticipant.getCarColor(),
+                        existingParticipant.getParticipantStatus()
+                    ),
+                    new JoinRaceResponse.RoomData(room.getRoomCode(), room.getStatus())
+                );
+            }
             String studentToken = jwtService.issueStudentToken(existingParticipant.getId(), room.getId());
             Student student = existingParticipant.getStudent();
             return new JoinRaceResponse(
@@ -128,12 +162,12 @@ public class RaceRoomService {
         }
 
         if (room.getStatus() != RaceRoomStatus.LOBBY && room.getStatus() != RaceRoomStatus.LOCKED) {
-            throw new ApiException("ROOM_CLOSED", "Room is not available");
+            throw new ApiException("ROOM_CLOSED", "החדר אינו זמין");
         }
 
         long count = countRegisteredParticipants(room);
         if (count >= room.getMaxParticipants()) {
-            throw new ApiException("ROOM_FULL", "Room is full");
+            throw new ApiException("ROOM_FULL", "החדר מלא");
         }
 
         Student student = new Student();
@@ -152,7 +186,7 @@ public class RaceRoomService {
         maybeLockRoom(room);
 
         String studentToken = jwtService.issueStudentToken(participant.getId(), room.getId());
-        sseEventPublisher.publish(room.getRoomCode(), "registration_requested", java.util.Map.of(
+        sseEventPublisher.publishAfterCommit(room.getRoomCode(), "registration_requested", java.util.Map.of(
             "participantId", participant.getId(),
             "displayName", student.getDisplayName(),
             "laneNo", participant.getLaneNo()
@@ -170,12 +204,12 @@ public class RaceRoomService {
         RaceRoom room = getByRoomCodeOrThrow(roomCode);
         ensureTeacherOwnsRoom(teacherId, room);
         if (room.getStatus() != RaceRoomStatus.LOBBY && room.getStatus() != RaceRoomStatus.LOCKED) {
-            throw new ApiException("ROOM_NOT_EDITABLE", "Race can be edited only before it starts");
+            throw new ApiException("ROOM_NOT_EDITABLE", "ניתן לערוך את המרוץ רק לפני שהוא מתחיל");
         }
 
         long registered = countRegisteredParticipants(room);
         if (request.maxParticipants() < registered) {
-            throw new ApiException("MAX_PARTICIPANTS_TOO_LOW", "Max participants cannot be lower than registered participants");
+            throw new ApiException("MAX_PARTICIPANTS_TOO_LOW", "מספר המשתתפים המרבי לא יכול להיות נמוך ממספר הנרשמים");
         }
 
         room.setTitle(request.title());
@@ -204,14 +238,14 @@ public class RaceRoomService {
         RaceRoom room = getByRoomCodeOrThrow(roomCode);
         ensureTeacherOwnsRoom(teacherId, room);
         if (room.getStatus() != RaceRoomStatus.LOBBY && room.getStatus() != RaceRoomStatus.LOCKED) {
-            throw new ApiException("ROOM_CLOSED", "Room is not available");
+            throw new ApiException("ROOM_CLOSED", "החדר אינו זמין");
         }
         String normalizedEmail = request.email().trim();
         if (raceParticipantRepository.findByRaceRoomAndStudent_EmailIgnoreCase(room, normalizedEmail).isPresent()) {
-            throw new ApiException("STUDENT_ALREADY_REGISTERED", "Student is already registered to this race");
+            throw new ApiException("STUDENT_ALREADY_REGISTERED", "התלמיד כבר רשום למרוץ זה");
         }
         if (countRegisteredParticipants(room) >= room.getMaxParticipants()) {
-            throw new ApiException("ROOM_FULL", "Room is full");
+            throw new ApiException("ROOM_FULL", "החדר מלא");
         }
 
         Student student = new Student();
@@ -228,7 +262,7 @@ public class RaceRoomService {
         raceParticipantRepository.save(participant);
         maybeLockRoom(room);
 
-        sseEventPublisher.publish(room.getRoomCode(), "registration_requested", java.util.Map.of(
+        sseEventPublisher.publishAfterCommit(room.getRoomCode(), "registration_requested", java.util.Map.of(
             "participantId", participant.getId(),
             "displayName", student.getDisplayName(),
             "laneNo", participant.getLaneNo()
@@ -250,7 +284,6 @@ public class RaceRoomService {
                     room.getStatus()
                 );
             })
-            .filter(r -> r.registeredCount() < r.maxParticipants())
             .toList();
     }
 
@@ -258,7 +291,7 @@ public class RaceRoomService {
     public List<StudentRaceSummaryResponse> listStudentRacesByEmail(String email) {
         String normalizedEmail = email == null ? "" : email.trim();
         if (normalizedEmail.isBlank()) {
-            throw new ApiException("EMAIL_REQUIRED", "Student email is required");
+            throw new ApiException("EMAIL_REQUIRED", "נדרש אימייל של תלמיד");
         }
 
         return raceParticipantRepository.findStudentRaceSummaries(normalizedEmail).stream()
@@ -289,20 +322,51 @@ public class RaceRoomService {
         ensureTeacherOwnsRoom(teacherId, room);
         RaceParticipant participant = getParticipantInRoomOrThrow(room, participantId);
         if (participant.getParticipantStatus() != ParticipantStatus.PENDING) {
-            throw new ApiException("PARTICIPANT_NOT_PENDING", "Participant is not pending");
+            throw new ApiException("PARTICIPANT_NOT_PENDING", "המשתתף אינו במצב המתנה");
         }
         long activeCount = raceParticipantRepository.countByRaceRoomAndParticipantStatus(room, ParticipantStatus.ACTIVE);
         if (activeCount >= room.getMaxParticipants()) {
-            throw new ApiException("ROOM_FULL", "Room is full");
+            throw new ApiException("ROOM_FULL", "החדר מלא");
         }
+        String displayName = participant.getStudent() != null && participant.getStudent().getDisplayName() != null
+            ? participant.getStudent().getDisplayName()
+            : "Student";
         participant.setParticipantStatus(ParticipantStatus.ACTIVE);
         raceParticipantRepository.save(participant);
         maybeLockRoom(room);
-        sseEventPublisher.publish(room.getRoomCode(), "registration_approved", java.util.Map.of(
-            "participantId", participant.getId(),
-            "displayName", participant.getStudent().getDisplayName()
-        ), participant.getId());
+        java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("participantId", participant.getId());
+        payload.put("displayName", displayName);
+        sseEventPublisher.publishAfterCommit(room.getRoomCode(), "registration_approved", payload, participant.getId());
         return participant;
+    }
+
+    @Transactional
+    public void leaveRaceAsStudent(String roomCode, Long participantId) {
+        RaceRoom room = getByRoomCodeOrThrow(roomCode);
+        RaceParticipant participant = getParticipantInRoomOrThrow(room, participantId);
+        String displayName = participant.getStudent() != null && participant.getStudent().getDisplayName() != null
+            ? participant.getStudent().getDisplayName()
+            : "Student";
+
+        if (room.getStatus() == RaceRoomStatus.LOBBY || room.getStatus() == RaceRoomStatus.LOCKED) {
+            raceParticipantRepository.delete(participant);
+            unlockRoomIfNeeded(room);
+        } else if (room.getStatus() == RaceRoomStatus.RUNNING || room.getStatus() == RaceRoomStatus.PAUSED) {
+            if (participant.getParticipantStatus() == ParticipantStatus.LEFT) {
+                return;
+            }
+            participant.setParticipantStatus(ParticipantStatus.LEFT);
+            raceParticipantRepository.save(participant);
+        } else {
+            throw new ApiException("RACE_ALREADY_FINISHED", "לא ניתן לעזוב מרוץ שכבר הסתיים");
+        }
+
+        java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("participantId", participantId);
+        payload.put("displayName", displayName);
+        payload.put("reason", "STUDENT_LEFT");
+        sseEventPublisher.publishAfterCommit(room.getRoomCode(), "registration_cancelled", payload);
     }
 
     @Transactional
@@ -311,44 +375,49 @@ public class RaceRoomService {
         ensureTeacherOwnsRoom(teacherId, room);
         RaceParticipant participant = getParticipantInRoomOrThrow(room, participantId);
         if (participant.getParticipantStatus() != ParticipantStatus.PENDING) {
-            throw new ApiException("PARTICIPANT_NOT_PENDING", "Only pending registrations can be rejected");
+            throw new ApiException("PARTICIPANT_NOT_PENDING", "ניתן לדחות רק הרשמות ממתינות לאישור");
         }
-        String displayName = participant.getStudent().getDisplayName();
+        String displayName = participant.getStudent() != null && participant.getStudent().getDisplayName() != null
+            ? participant.getStudent().getDisplayName()
+            : "Student";
         raceParticipantRepository.delete(participant);
         unlockRoomIfNeeded(room);
-        sseEventPublisher.publish(room.getRoomCode(), "registration_rejected", java.util.Map.of(
-            "participantId", participantId,
-            "displayName", displayName
-        ), participantId);
+        java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("participantId", participantId);
+        payload.put("displayName", displayName);
+        sseEventPublisher.publishAfterCommit(room.getRoomCode(), "registration_rejected", payload, participantId);
     }
 
     @Transactional
     public void removeParticipant(String roomCode, Long teacherId, Long participantId) {
         RaceRoom room = getByRoomCodeOrThrow(roomCode);
         ensureTeacherOwnsRoom(teacherId, room);
-        if (room.getStatus() != RaceRoomStatus.LOBBY && room.getStatus() != RaceRoomStatus.LOCKED) {
-            throw new ApiException("ROOM_NOT_EDITABLE", "Students can be removed only before the race starts");
+        if (!isBeforeRaceStart(room)) {
+            throw new ApiException("ROOM_NOT_EDITABLE", "ניתן להסיר תלמידים רק לפני תחילת המרוץ");
         }
 
         RaceParticipant participant = getParticipantInRoomOrThrow(room, participantId);
-        String displayName = participant.getStudent().getDisplayName();
+        String displayName = participant.getStudent() != null && participant.getStudent().getDisplayName() != null
+            ? participant.getStudent().getDisplayName()
+            : "Student";
         raceParticipantRepository.delete(participant);
+        raceParticipantRepository.flush();
         unlockRoomIfNeeded(room);
-        sseEventPublisher.publish(room.getRoomCode(), "registration_rejected", java.util.Map.of(
-            "participantId", participantId,
-            "displayName", displayName
-        ), participantId);
+        java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("participantId", participantId);
+        payload.put("displayName", displayName);
+        sseEventPublisher.publishAfterCommit(room.getRoomCode(), "registration_rejected", payload, participantId);
     }
 
     @Transactional
     public RaceRoom startRace(String roomCode) {
         RaceRoom room = getByRoomCodeOrThrow(roomCode);
         if (room.getStatus() != RaceRoomStatus.LOBBY && room.getStatus() != RaceRoomStatus.LOCKED) {
-            throw new ApiException("ROOM_NOT_IN_LOBBY", "Race can start only from lobby");
+            throw new ApiException("ROOM_NOT_IN_LOBBY", "ניתן להתחיל את המרוץ רק מהלובי");
         }
         long activeCount = raceParticipantRepository.countByRaceRoomAndParticipantStatus(room, ParticipantStatus.ACTIVE);
         if (activeCount < 1) {
-            throw new ApiException("NO_APPROVED_PARTICIPANTS", "No approved participants");
+            throw new ApiException("NO_APPROVED_PARTICIPANTS", "אין משתתפים מאושרים");
         }
         room.setStatus(RaceRoomStatus.RUNNING);
         room.setStartAt(LocalDateTime.now());
@@ -370,6 +439,8 @@ public class RaceRoomService {
         List<RoomDetailsResponse.ParticipantRow> rows = raceParticipantRepository
             .findByRaceRoomOrderByProgressPointsDesc(room)
             .stream()
+            .filter(p -> p.getParticipantStatus() == ParticipantStatus.PENDING
+                || p.getParticipantStatus() == ParticipantStatus.ACTIVE)
             .map(p -> new RoomDetailsResponse.ParticipantRow(
                 p.getId(),
                 p.getStudent().getId(),
@@ -443,11 +514,20 @@ public class RaceRoomService {
         return new FinalResultsResponse(room.getRoomCode(), room.getWinnerParticipantId(), winnerName, leaderboard);
     }
 
+    private boolean isBeforeRaceStart(RaceRoom room) {
+        if (room.getStartAt() != null) {
+            return false;
+        }
+        return room.getStatus() == RaceRoomStatus.DRAFT
+            || room.getStatus() == RaceRoomStatus.LOBBY
+            || room.getStatus() == RaceRoomStatus.LOCKED;
+    }
+
     private void maybeLockRoom(RaceRoom room) {
         if (countRegisteredParticipants(room) >= room.getMaxParticipants() && room.getStatus() == RaceRoomStatus.LOBBY) {
             room.setStatus(RaceRoomStatus.LOCKED);
             raceRoomRepository.save(room);
-            sseEventPublisher.publish(room.getRoomCode(), "room_locked", java.util.Map.of(
+            sseEventPublisher.publishAfterCommit(room.getRoomCode(), "room_locked", java.util.Map.of(
                 "status", "LOCKED",
                 "message", "החדר ננעל - הגיע למכסת המשתתפים"
             ));
@@ -458,7 +538,7 @@ public class RaceRoomService {
         if (room.getStatus() == RaceRoomStatus.LOCKED && countRegisteredParticipants(room) < room.getMaxParticipants()) {
             room.setStatus(RaceRoomStatus.LOBBY);
             raceRoomRepository.save(room);
-            sseEventPublisher.publish(room.getRoomCode(), "room_unlocked", java.util.Map.of("status", "LOBBY"));
+            sseEventPublisher.publishAfterCommit(room.getRoomCode(), "room_unlocked", java.util.Map.of("status", "LOBBY"));
         }
     }
 
@@ -470,7 +550,7 @@ public class RaceRoomService {
         return IntStream.rangeClosed(1, room.getMaxParticipants())
             .filter(i -> !used.contains(i))
             .findFirst()
-            .orElseThrow(() -> new ApiException("NO_LANE_AVAILABLE", "No lane available"));
+            .orElseThrow(() -> new ApiException("NO_LANE_AVAILABLE", "אין מסלול פנוי"));
     }
 
     private String generateRoomCode() {
@@ -478,10 +558,10 @@ public class RaceRoomService {
     }
 
     private RaceParticipant getParticipantInRoomOrThrow(RaceRoom room, Long participantId) {
-        RaceParticipant participant = raceParticipantRepository.findById(participantId)
-            .orElseThrow(() -> new ApiException("PARTICIPANT_NOT_FOUND", "Participant not found"));
+        RaceParticipant participant = raceParticipantRepository.findDetailedById(participantId)
+            .orElseThrow(() -> new ApiException("PARTICIPANT_NOT_FOUND", "המשתתף לא נמצא"));
         if (!participant.getRaceRoom().getId().equals(room.getId())) {
-            throw new ApiException("PARTICIPANT_NOT_IN_ROOM", "Participant not in room");
+            throw new ApiException("PARTICIPANT_NOT_IN_ROOM", "המשתתף אינו בחדר");
         }
         return participant;
     }

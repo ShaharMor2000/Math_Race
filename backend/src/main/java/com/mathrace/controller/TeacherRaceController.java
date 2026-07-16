@@ -86,11 +86,12 @@ public class TeacherRaceController {
     ) {
         AuthPrincipal principal = AuthSupport.requireTeacher(request);
         RaceParticipant participant = raceRoomService.addStudentByTeacher(roomCode, principal.teacherId(), addStudentRequest);
-        return Map.of(
-            "participantId", participant.getId(),
-            "displayName", participant.getStudent().getDisplayName(),
-            "participantStatus", participant.getParticipantStatus().name()
-        );
+        String displayName = participant.getStudent() != null ? participant.getStudent().getDisplayName() : "";
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("participantId", participant.getId());
+        body.put("displayName", displayName != null ? displayName : "");
+        body.put("participantStatus", participant.getParticipantStatus().name());
+        return body;
     }
 
     @PostMapping("/{roomCode}/start")
