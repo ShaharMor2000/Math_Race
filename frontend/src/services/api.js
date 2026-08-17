@@ -114,14 +114,14 @@ async function request(path, options = {}) {
       headers
     });
   } catch {
-    const error = new Error("Backend server is not running. Start the server on port 8080 and try again.");
+    const error = new Error("שרת ה־Backend אינו פועל. הפעילו את השרת בפורט 8080 ונסו שוב.");
     error.code = "BACKEND_UNAVAILABLE";
     throw error;
   }
 
   if (!response.ok) {
     const errBody = await response.text();
-    let errorMessage = errBody || "API error";
+    let errorMessage = errBody || "שגיאת מערכת";
     let parsedError = null;
     try {
       const parsed = JSON.parse(errBody);
@@ -283,6 +283,13 @@ export const api = {
         displayName,
         email: session.getGuestEmail()
       }),
+      useTeacherAuth: false
+    }),
+
+  leaveRace: (roomCode) =>
+    request(`/student/races/${roomCode}/leave`, {
+      method: "POST",
+      useStudentAuth: true,
       useTeacherAuth: false
     }),
 

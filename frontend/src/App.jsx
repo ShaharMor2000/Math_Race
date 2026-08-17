@@ -60,6 +60,7 @@ function App() {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [pendingLogout, setPendingLogout] = useState(null);
   const [teacherAuthOpen, setTeacherAuthOpen] = useState(false);
+  const [studentAlert, setStudentAlert] = useState(null);
 
   const showToast = useCallback((message, type = "error") => {
     if (!message) return;
@@ -100,9 +101,15 @@ function App() {
   );
 
   useEffect(() => {
-    if (!teacherId) return;
+    if (!teacherId || role !== "teacher") return;
     void refreshTeacherRooms();
-  }, [teacherId, role]);
+    const timer = window.setInterval(() => {
+      if (!activeRoomCode) {
+        void refreshTeacherRooms().catch(() => {});
+      }
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [teacherId, role, activeRoomCode]);
 
   useEffect(() => {
     if (!session.getStudentRoomCode()) return;
@@ -122,6 +129,10 @@ function App() {
   useEffect(() => {
     if (role !== "student" || studentRoomCode) return;
     void refreshOpenRaces().catch((error) => showToast(error.message));
+    const timer = window.setInterval(() => {
+      void refreshOpenRaces().catch(() => {});
+    }, 4000);
+    return () => window.clearInterval(timer);
   }, [role, studentRoomCode, showToast]);
 
   const pushTeacherEvent = useCallback((type, message) => {
@@ -320,6 +331,7 @@ function App() {
     if (!activeRoomCode) return;
     await runAction(async () => {
       await api.startRace(activeRoomCode);
+      setRoomMeta((prev) => (prev ? { ...prev, status: "RUNNING" } : prev));
       const board = await api.leaderboard(activeRoomCode);
       setLeaderboard(board);
       setParticipants((prev) => prev.filter((p) => p.participantStatus === "ACTIVE"));
@@ -356,8 +368,21 @@ function App() {
   const approveParticipant = async (participantId) => {
     if (!activeRoomCode) return;
     await runAction(async () => {
-      await api.approveParticipant(activeRoomCode, participantId);
-      await loadRoomDetails(activeRoomCode);
+      try {
+        await api.approveParticipant(activeRoomCode, participantId);
+        await loadRoomDetails(activeRoomCode);
+      } catch (error) {
+        await loadRoomDetails(activeRoomCode);
+        const message = String(error?.message || "");
+        if (
+          message.includes("PARTICIPANT_NOT_FOUND") ||
+          message.includes("המשתתף לא נמצא") ||
+          message.toLowerCase().includes("not found")
+        ) {
+          throw new Error("התלמיד ביטל את ההרשמה ואינו ברשימה יותר");
+        }
+        throw error;
+      }
     }, "התלמיד אושר");
   };
 
@@ -371,9 +396,21 @@ function App() {
 
   const removeParticipant = async (participantId) => {
     if (!activeRoomCode) return;
+    const previous = participants;
+    setParticipants((prev) => prev.filter((p) => p.participantId !== participantId));
     await runAction(async () => {
-      await api.removeParticipant(activeRoomCode, participantId);
-      await loadRoomDetails(activeRoomCode);
+      try {
+        await api.removeParticipant(activeRoomCode, participantId);
+        await loadRoomDetails(activeRoomCode);
+      } catch (error) {
+        setParticipants(previous);
+        await loadRoomDetails(activeRoomCode).catch(() => {});
+        const message = String(error?.message || "");
+        if (message.includes("ROOM_NOT_EDITABLE") || message.includes("לפני תחילת המרוץ") || message.includes("before the race")) {
+          throw new Error("לא ניתן למחוק — המרוץ כבר התחיל או שהחדר כבר לא בלובי. רעננתי את המסך.");
+        }
+        throw error;
+      }
     }, "התלמיד נמחק");
   };
 
@@ -384,6 +421,46 @@ function App() {
       await loadRoomDetails(activeRoomCode);
     }, "התלמיד נוסף");
   };
+
+  const showFinalResultsForRoom = useCallback(async (roomCode, preset = null) => {
+    if (!roomCode) return;
+    const applyResults = (results) => {
+      if (role === "teacher") {
+        setTeacherFinalRows(results.leaderboard);
+        setTeacherWinnerName(results.winnerName);
+        setRoomMeta((prev) => (prev ? { ...prev, status: "FINISHED" } : prev));
+      } else {
+        setStudentFinalRows(results.leaderboard);
+        setStudentWinnerName(results.winnerName);
+        setStudentRoomStatus("FINISHED");
+        setStudentQuestion(null);
+        setPendingPathDecision(false);
+        setStudentRacePaused(false);
+        setStudentParticipantStatus("FINISHED");
+      }
+    };
+
+    if (Array.isArray(preset?.leaderboard) && preset.leaderboard.length > 0) {
+      applyResults({
+        leaderboard: preset.leaderboard,
+        winnerName: preset.winnerName || ""
+      });
+      return;
+    }
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        const results = await api.finalResults(roomCode);
+        if (Array.isArray(results.leaderboard)) {
+          applyResults(results);
+          return;
+        }
+      } catch {
+        // Results may not be readable yet right after finish; retry briefly.
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 300 * (attempt + 1)));
+    }
+  }, [role]);
 
   const answerQuestion = async (answer, responseTimeMs) => {
     if (!studentRoomCode || !studentParticipantId || !studentQuestion || studentRacePaused) return;
@@ -399,6 +476,13 @@ function App() {
       setAnswerFeedback(res.correct ? "correct-flash" : "wrong-flash");
       window.setTimeout(() => setAnswerFeedback(null), 500);
 
+      if (Number(res.newProgress) >= 1000) {
+        setStudentQuestion(null);
+        setPendingPathDecision(false);
+        await showFinalResultsForRoom(studentRoomCode);
+        return;
+      }
+
       const hasPathDecision = res.triggeredEvent?.type === "PATH_DECISION";
       setPendingPathDecision(hasPathDecision);
       if (!hasPathDecision) {
@@ -408,14 +492,26 @@ function App() {
       }
     } catch (error) {
       const message = String(error?.message || "");
-      const shouldContinue =
-        !answer ||
-        message.includes("QUESTION_ALREADY_ANSWERED") ||
-        message.includes("Question already answered") ||
-        message.includes("API error");
+      const raceEnded =
+        message.includes("ROOM_NOT_RUNNING") ||
+        message.includes("המרוץ אינו פעיל") ||
+        message.includes("RACE_TIMEOUT") ||
+        message.includes("זמן המרוץ הסתיים");
 
       setStudentQuestion(null);
       setPendingPathDecision(false);
+
+      if (raceEnded && studentRoomCode) {
+        await showFinalResultsForRoom(studentRoomCode);
+        return;
+      }
+
+      const shouldContinue =
+        !answer ||
+        message.includes("QUESTION_ALREADY_ANSWERED") ||
+        message.includes("השאלה כבר נענתה") ||
+        message.includes("שגיאת מערכת");
+
       if (shouldContinue && studentRoomCode) {
         await fetchNextQuestion(studentRoomCode);
         return;
@@ -484,7 +580,7 @@ function App() {
     setIsEditingRace(false);
   };
 
-  const leaveStudentRace = () => {
+  const clearStudentLocalState = () => {
     session.clearStudent();
     setStudentDisplayName("");
     setStudentRoomCode(null);
@@ -500,11 +596,24 @@ function App() {
     setStudentWinnerName(null);
     setStudentView("dashboard");
     setStudentRacePaused(false);
+  };
+
+  const leaveStudentRace = async () => {
+    const roomCode = studentRoomCode;
+    if (roomCode && session.getStudentToken()) {
+      try {
+        await api.leaveRace(roomCode);
+      } catch {
+        // Still clear local session if the server already removed the registration.
+      }
+    }
+    clearStudentLocalState();
     void refreshOpenRaces();
   };
 
   const resetStudentFlow = () => {
-    leaveStudentRace();
+    clearStudentLocalState();
+    void refreshOpenRaces();
   };
 
   const teacherRoomStatus = roomMeta?.status;
@@ -544,7 +653,7 @@ function App() {
       else setStudentEventMessage(msg);
     }
     if (event.type === "bonus") {
-      const msg = String(payload.message || "Bonus received");
+      const msg = String(payload.message || "התקבל בונוס");
       if (role === "teacher") pushTeacherEvent("bonus", msg);
       else setStudentEventMessage(msg);
     }
@@ -569,7 +678,12 @@ function App() {
           "ACTIVE",
           studentDisplayName
         );
-        if (studentRoomCode && !studentQuestion) {
+        setStudentRoomStatus((prev) => prev || "LOBBY");
+        if (
+          studentRoomCode &&
+          !studentQuestion &&
+          (studentRoomStatus === "RUNNING" || studentRoomStatus === "PAUSED")
+        ) {
           void fetchNextQuestion(studentRoomCode);
         }
         setStudentEventMessage("אושרת למרוץ!");
@@ -577,22 +691,54 @@ function App() {
       }
     }
     if (event.type === "registration_rejected") {
+      const rejectedId = Number(payload.participantId);
+      if (!Number.isNaN(rejectedId)) {
+        setParticipants((prev) => prev.filter((p) => p.participantId !== rejectedId));
+      }
       if (role === "teacher" && activeRoomCode) {
         void loadRoomDetails(activeRoomCode);
       }
-      if (studentParticipantId && Number(payload.participantId) === studentParticipantId) {
+      if (studentParticipantId && rejectedId === studentParticipantId) {
         resetStudentFlow();
-        setStudentEventMessage("ההרשמה נדחתה על ידי המורה.");
+        setStudentAlert({
+          title: "שים לב",
+          message: "המורה לא אישר את ההרשמה שלך"
+        });
+      }
+    }
+    if (event.type === "registration_cancelled") {
+      const leftId = Number(payload.participantId);
+      if (!Number.isNaN(leftId)) {
+        setParticipants((prev) => prev.filter((p) => p.participantId !== leftId));
+      }
+      if (role === "teacher" && activeRoomCode) {
+        void loadRoomDetails(activeRoomCode);
+        void refreshTeacherRooms();
+        const name = payload.displayName ? String(payload.displayName) : "תלמיד";
+        pushTeacherEvent("registration_cancelled", `${name} ביטל/ה את ההרשמה`);
+        showToast(`${name} ביטל/ה את ההרשמה`, "info");
       }
     }
     if (event.type === "race_started") {
-      if (role === "teacher") pushTeacherEvent("race_started", "המרוץ התחיל!");
+      if (role === "teacher") {
+        pushTeacherEvent("race_started", "המרוץ התחיל!");
+        setRoomMeta((prev) => (prev ? { ...prev, status: "RUNNING" } : prev));
+        if (activeRoomCode) void loadRoomDetails(activeRoomCode);
+      }
       if (role === "student") setStudentRoomStatus("RUNNING");
       if (studentRoomCode && studentParticipantId && studentParticipantStatus === "ACTIVE") {
         setStudentRacePaused(false);
         setStudentView("race");
         void fetchNextQuestion(studentRoomCode);
       }
+    }
+    if (event.type === "room_locked") {
+      setRoomMeta((prev) => (prev ? { ...prev, status: "LOCKED" } : prev));
+      if (role === "student") setStudentRoomStatus("LOCKED");
+    }
+    if (event.type === "room_unlocked") {
+      setRoomMeta((prev) => (prev ? { ...prev, status: "LOBBY" } : prev));
+      if (role === "student") setStudentRoomStatus("LOBBY");
     }
     if (event.type === "race_paused") {
       if (activeRoomCode) void loadRoomDetails(activeRoomCode);
@@ -613,14 +759,10 @@ function App() {
     }
     if (event.type === "race_finished") {
       const roomCode = event.roomCode;
-      void api.finalResults(roomCode).then((results) => {
-        if (role === "teacher") {
-          setTeacherFinalRows(results.leaderboard);
-          setTeacherWinnerName(results.winnerName);
-        } else {
-          setStudentFinalRows(results.leaderboard);
-          setStudentWinnerName(results.winnerName);
-        }
+      const payload = event.payload || {};
+      void showFinalResultsForRoom(roomCode, {
+        leaderboard: payload.leaderboard,
+        winnerName: payload.winnerName
       });
     }
   };
@@ -645,6 +787,14 @@ function App() {
         danger
         onConfirm={confirmLogout}
         onCancel={cancelLogout}
+      />
+      <ConfirmDialog
+        open={Boolean(studentAlert)}
+        title={studentAlert?.title || ""}
+        message={studentAlert?.message || ""}
+        confirmText="הבנתי"
+        hideCancel
+        onConfirm={() => setStudentAlert(null)}
       />
       <FloatingNumbersBackground />
 
@@ -721,6 +871,7 @@ function App() {
               roomCode={activeRoomCode}
               roomStatus={roomMeta?.status}
               participants={participants}
+              eventMessage={teacherEventMessage}
               onApproveParticipant={approveParticipant}
               onRejectParticipant={rejectParticipant}
               onRemoveParticipant={removeParticipant}
@@ -791,6 +942,9 @@ function App() {
               <h3>ממתין לאישור מורה</h3>
               <p className="room-code-display">{studentRoomCode}</p>
               <p className="muted">{studentEventMessage || "נרשמת בהצלחה. המתן לאישור."}</p>
+              <Button variant="ghost" onClick={() => void leaveStudentRace()}>
+                ביטול הרשמה
+              </Button>
             </section>
           ) : null}
           {studentRoomCode && studentView === "race" && studentParticipantStatus === "ACTIVE" && !studentFinalRows ? (
@@ -807,6 +961,7 @@ function App() {
               onAnswer={answerQuestion}
               onChoosePath={choosePath}
               onSwapQuestion={swapQuestion}
+              onLeaveRace={leaveStudentRace}
             />
           ) : null}
           {studentFinalRows ? (

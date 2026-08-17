@@ -36,6 +36,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -90,7 +91,7 @@ public class GameEngineService {
     public void pauseRace(String roomCode) {
         RaceRoom room = raceRoomService.getByRoomCodeOrThrow(roomCode);
         if (room.getStatus() != RaceRoomStatus.RUNNING) {
-            throw new ApiException("ROOM_NOT_RUNNING", "Race is not running");
+            throw new ApiException("ROOM_NOT_RUNNING", "המרוץ אינו פעיל");
         }
         room.setStatus(RaceRoomStatus.PAUSED);
         raceRoomRepository.save(room);
@@ -101,7 +102,7 @@ public class GameEngineService {
     public void resumeRace(String roomCode) {
         RaceRoom room = raceRoomService.getByRoomCodeOrThrow(roomCode);
         if (room.getStatus() != RaceRoomStatus.PAUSED) {
-            throw new ApiException("ROOM_NOT_PAUSED", "Race is not paused");
+            throw new ApiException("ROOM_NOT_PAUSED", "המרוץ אינו מושהה");
         }
         room.setStatus(RaceRoomStatus.RUNNING);
         raceRoomRepository.save(room);
@@ -169,17 +170,17 @@ public class GameEngineService {
         ensureRacePlayable(room);
 
         GeneratedQuestion current = generatedQuestionRepository.findById(questionId)
-            .orElseThrow(() -> new ApiException("QUESTION_NOT_FOUND", "Question not found"));
+            .orElseThrow(() -> new ApiException("QUESTION_NOT_FOUND", "השאלה לא נמצאה"));
         if (!current.getRaceParticipant().getId().equals(participantId)) {
-            throw new ApiException("QUESTION_NOT_OWNED", "Question does not belong to participant");
+            throw new ApiException("QUESTION_NOT_OWNED", "השאלה אינה שייכת למשתתף");
         }
         if (current.isAnswered()) {
-            throw new ApiException("QUESTION_ALREADY_ANSWERED", "Question already answered");
+            throw new ApiException("QUESTION_ALREADY_ANSWERED", "השאלה כבר נענתה");
         }
 
         RuntimeParticipantState state = sessionState(room.getId(), participant);
         if (!state.isQuestionSwapAvailable()) {
-            throw new ApiException("SWAP_NOT_AVAILABLE", "Question swap is not available");
+            throw new ApiException("SWAP_NOT_AVAILABLE", "החלפת שאלה אינה זמינה");
         }
 
         current.setExpiredAt(LocalDateTime.now());
@@ -201,12 +202,12 @@ public class GameEngineService {
         checkGlobalRaceTimeout(room);
 
         GeneratedQuestion question = generatedQuestionRepository.findById(request.questionId())
-            .orElseThrow(() -> new ApiException("QUESTION_NOT_FOUND", "Question not found"));
+            .orElseThrow(() -> new ApiException("QUESTION_NOT_FOUND", "השאלה לא נמצאה"));
         if (question.isAnswered()) {
-            throw new ApiException("QUESTION_ALREADY_ANSWERED", "Question already answered");
+            throw new ApiException("QUESTION_ALREADY_ANSWERED", "השאלה כבר נענתה");
         }
         if (!question.getRaceParticipant().getId().equals(participantId)) {
-            throw new ApiException("QUESTION_NOT_OWNED", "Question does not belong to participant");
+            throw new ApiException("QUESTION_NOT_OWNED", "השאלה אינה שייכת למשתתף");
         }
 
         List<RaceParticipant> rankingBeforeAnswer = activeParticipants(room);
@@ -389,7 +390,7 @@ public class GameEngineService {
 
         RuntimeParticipantState state = sessionState(room.getId(), participant);
         if (!state.isPendingPathDecision()) {
-            throw new ApiException("NO_PENDING_PATH_DECISION", "No pending path decision");
+            throw new ApiException("NO_PENDING_PATH_DECISION", "אין בחירת מסלול ממתינה");
         }
         state.setPendingPathDecision(false);
         state.setDecisionMeter(0);
@@ -526,21 +527,21 @@ public class GameEngineService {
 
     private RaceParticipant getParticipantOrThrow(Long participantId) {
         return raceParticipantRepository.findById(participantId)
-            .orElseThrow(() -> new ApiException("PARTICIPANT_NOT_FOUND", "Participant not found"));
+            .orElseThrow(() -> new ApiException("PARTICIPANT_NOT_FOUND", "המשתתף לא נמצא"));
     }
 
     private void validateParticipantInRoom(RaceParticipant participant, RaceRoom room) {
         if (!participant.getRaceRoom().getId().equals(room.getId())) {
-            throw new ApiException("PARTICIPANT_NOT_IN_ROOM", "Participant not in room");
+            throw new ApiException("PARTICIPANT_NOT_IN_ROOM", "המשתתף אינו בחדר");
         }
         if (participant.getParticipantStatus() != ParticipantStatus.ACTIVE) {
-            throw new ApiException("PARTICIPANT_NOT_APPROVED", "Participant is not approved");
+            throw new ApiException("PARTICIPANT_NOT_APPROVED", "המשתתף אינו מאושר");
         }
     }
 
     private void ensureRacePlayable(RaceRoom room) {
         if (room.getStatus() != RaceRoomStatus.RUNNING) {
-            throw new ApiException("ROOM_NOT_RUNNING", "Race not running");
+            throw new ApiException("ROOM_NOT_RUNNING", "המרוץ אינו פעיל");
         }
     }
 
@@ -554,7 +555,7 @@ public class GameEngineService {
             room.setFinishAt(LocalDateTime.now());
             raceRoomRepository.save(room);
             finalizeRace(room, null);
-            throw new ApiException("RACE_TIMEOUT", "Race time is over");
+            throw new ApiException("RACE_TIMEOUT", "זמן המרוץ הסתיים");
         }
     }
 
@@ -686,16 +687,40 @@ public class GameEngineService {
             result.setTotalWrong(participant.getWrongCount());
             result.setTotalEvents((int) gameEventRepository.countByRaceParticipantId(participant.getId()));
             raceResultRepository.save(result);
+
+            participant.setParticipantStatus(ParticipantStatus.FINISHED);
+            raceParticipantRepository.save(participant);
         }
 
         String winnerName = winner == null ? resolveWinnerName(room, ranking) : winner.getStudent().getDisplayName();
         if (hasFirstPlaceTie(ranking)) {
             winnerName = "שוויון";
         }
-        Map<String, Object> payload = new HashMap<>();
+
+        List<Map<String, Object>> leaderboard = ranking.stream()
+            .map(participant -> {
+                int total = participant.getCorrectCount() + participant.getWrongCount();
+                double accuracy = total == 0 ? 0.0 : ((double) participant.getCorrectCount() / total) * 100.0;
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("rank", rankByParticipant.get(participant.getId()));
+                row.put("displayName", participant.getStudent().getDisplayName());
+                row.put("finalProgress", participant.getProgressPoints());
+                row.put("finalScore", participant.getScoreTotal());
+                row.put("accuracyPct", BigDecimal.valueOf(accuracy).setScale(2, RoundingMode.HALF_UP).doubleValue());
+                row.put("avgResponseMs", participant.getAvgResponseMs());
+                row.put("totalCorrect", participant.getCorrectCount());
+                row.put("totalWrong", participant.getWrongCount());
+                row.put("totalEvents", (int) gameEventRepository.countByRaceParticipantId(participant.getId()));
+                return row;
+            })
+            .toList();
+
+        Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("winnerParticipantId", room.getWinnerParticipantId());
         payload.put("winnerName", winnerName);
-        sseEventPublisher.publish(room.getRoomCode(), "race_finished", payload);
+        payload.put("leaderboard", leaderboard);
+        // After commit so every client can load results and stop playing together.
+        sseEventPublisher.publishAfterCommit(room.getRoomCode(), "race_finished", payload);
     }
 
     private String resolveWinnerName(RaceRoom room, List<RaceParticipant> ranking) {

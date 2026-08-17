@@ -74,10 +74,10 @@ public class AuthService {
     public TeacherLoginResponse loginTeacher(TeacherLoginRequest request) {
         String username = normalizeUsername(request.email());
         Teacher teacher = teacherRepository.findByEmail(username)
-            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "המשתמש לא נמצא"));
+            .orElseThrow(() -> new ApiException("INVALID_CREDENTIALS", "שם משתמש או סיסמה שגויים"));
 
         if (!passwordEncoder.matches(request.password(), teacher.getPasswordHash())) {
-            throw new ApiException("INVALID_PASSWORD", "הסיסמה שגויה");
+            throw new ApiException("INVALID_CREDENTIALS", "שם משתמש או סיסמה שגויים");
         }
 
         teacher.setLastLoginAt(LocalDateTime.now());
@@ -140,7 +140,7 @@ public class AuthService {
         if (tokenInfo.has("error")) {
             throw new ApiException(
                 "GOOGLE_LOGIN_FAILED",
-                tokenInfo.path("error_description").asText("Google token verification failed")
+                tokenInfo.path("error_description").asText("אימות טוקן Google נכשל")
             );
         }
 
@@ -155,16 +155,16 @@ public class AuthService {
         String audience = tokenInfo.path("aud").asText("");
 
         if (email.isBlank()) {
-            throw new ApiException("GOOGLE_LOGIN_FAILED", "Google token does not include email");
+            throw new ApiException("GOOGLE_LOGIN_FAILED", "טוקן Google אינו כולל אימייל");
         }
         if (!emailVerified) {
-            throw new ApiException("GOOGLE_LOGIN_FAILED", "Google email is not verified");
+            throw new ApiException("GOOGLE_LOGIN_FAILED", "אימייל Google אינו מאומת");
         }
         if (googleClientId.isBlank()) {
-            throw new ApiException("GOOGLE_LOGIN_NOT_CONFIGURED", "Google client ID is not configured on the server");
+            throw new ApiException("GOOGLE_LOGIN_NOT_CONFIGURED", "מזהה לקוח Google אינו מוגדר בשרת");
         }
         if (!googleClientId.equals(audience)) {
-            throw new ApiException("GOOGLE_LOGIN_FAILED", "Google token audience mismatch");
+            throw new ApiException("GOOGLE_LOGIN_FAILED", "אי-התאמה בקהל של טוקן Google");
         }
 
         Teacher teacher = teacherRepository.findByEmail(email).orElseGet(() -> {
@@ -201,11 +201,11 @@ public class AuthService {
                 .retrieve()
                 .body(String.class);
             if (response == null || response.isBlank()) {
-                throw new ApiException("GOOGLE_LOGIN_FAILED", "Google token verification failed");
+                throw new ApiException("GOOGLE_LOGIN_FAILED", "אימות טוקן Google נכשל");
             }
             return objectMapper.readTree(response);
         } catch (Exception ex) {
-            throw new ApiException("GOOGLE_LOGIN_FAILED", "Google login failed");
+            throw new ApiException("GOOGLE_LOGIN_FAILED", "התחברות Google נכשלה");
         }
     }
 

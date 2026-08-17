@@ -1,5 +1,7 @@
 package com.mathrace.exception;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -12,6 +14,8 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ErrorResponse> handleApi(ApiException ex) {
@@ -29,6 +33,14 @@ public class GlobalExceptionHandler {
         String message = fieldErrors.values().stream().findFirst().orElse("פרטי ההרשמה אינם תקינים");
         return ResponseEntity.badRequest()
             .body(new ErrorResponse("VALIDATION_ERROR", message, fieldErrors));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex) {
+        log.error("Unhandled server error", ex);
+        return ResponseEntity
+            .status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body(new ErrorResponse("INTERNAL_ERROR", "אירעה שגיאה בשרת", ex.getClass().getSimpleName()));
     }
 
     private HttpStatus resolveStatus(String code) {

@@ -79,7 +79,8 @@ export function ConfirmDialog({
   cancelText = "ביטול",
   onConfirm,
   onCancel,
-  danger = false
+  danger = false,
+  hideCancel = false
 }) {
   if (!open) return null;
 
@@ -89,7 +90,9 @@ export function ConfirmDialog({
         <h3 id="confirm-title">{title}</h3>
         <p>{message}</p>
         <div className="confirm-actions">
-          <Button variant="ghost" onClick={onCancel}>{cancelText}</Button>
+          {!hideCancel && onCancel ? (
+            <Button variant="ghost" onClick={onCancel}>{cancelText}</Button>
+          ) : null}
           <Button variant={danger ? "danger" : "primary"} onClick={onConfirm}>{confirmText}</Button>
         </div>
       </div>

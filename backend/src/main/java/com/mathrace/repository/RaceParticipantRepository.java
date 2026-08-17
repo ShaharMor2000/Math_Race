@@ -13,6 +13,10 @@ import java.util.List;
 import java.util.Optional;
 
 public interface RaceParticipantRepository extends JpaRepository<RaceParticipant, Long> {
+    @EntityGraph(attributePaths = {"student", "raceRoom"})
+    @Query("select p from RaceParticipant p where p.id = :id")
+    Optional<RaceParticipant> findDetailedById(@Param("id") Long id);
+
     @EntityGraph(attributePaths = "student")
     List<RaceParticipant> findByRaceRoomOrderByProgressPointsDesc(RaceRoom room);
 

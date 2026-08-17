@@ -25,7 +25,7 @@ public class RateLimitService {
                 window.pollFirst();
             }
             if (window.size() >= MAX_REQUESTS) {
-                throw new ApiException("RATE_LIMITED", "Too many answer submissions. Slow down.");
+                throw new ApiException("RATE_LIMITED", "נשלחו יותר מדי תשובות. האטו בבקשה.");
             }
             window.addLast(now);
         }

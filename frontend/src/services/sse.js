@@ -30,6 +30,7 @@ export function createRoomStream(roomCode, onEvent, options = {}) {
     "registration_requested",
     "registration_approved",
     "registration_rejected",
+    "registration_cancelled",
     "race_finished"
   ];
 

@@ -19,16 +19,16 @@ function MiniIcon({ type }) {
     ),
     eye: (
       <>
-        <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
-        <circle cx="12" cy="12" r="3" />
+        <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
+        <circle cx="12" cy="12" r="2.5" />
       </>
     ),
     eyeOff: (
       <>
         <path d="M3 3l18 18" />
-        <path d="M10.7 5.2A11 11 0 0 1 12 5c6 0 9.5 7 9.5 7a18 18 0 0 1-2.1 2.9" />
-        <path d="M6.6 6.6C3.9 8.4 2.5 12 2.5 12s3.5 7 9.5 7c1.7 0 3.1-.4 4.3-1" />
-        <path d="M9.9 9.9A3 3 0 0 0 14.1 14.1" />
+        <path d="M10.7 10.7A2.5 2.5 0 0 0 12 14.5a2.5 2.5 0 0 0 2.3-1.3" />
+        <path d="M6.4 6.6C4.2 8 2.8 10.1 2 12c0 0 3.5 6 10 6 1.8 0 3.3-.4 4.6-1" />
+        <path d="M9.9 5.2C10.6 5.1 11.3 5 12 5c6.5 0 10 7 10 7a16.7 16.7 0 0 1-3.2 4.1" />
       </>
     )
   };
@@ -340,7 +340,7 @@ export function TeacherAuthModal({
 
             <label>
               <span>סיסמה חדשה</span>
-              <div className="auth-input-wrap">
+              <div className="auth-input-wrap auth-input-wrap--password">
                 <span className="auth-input-icon" aria-hidden="true"><MiniIcon type="lock" /></span>
                 <input
                   value={newPassword}
@@ -356,7 +356,7 @@ export function TeacherAuthModal({
 
             <label>
               <span>אימות סיסמה</span>
-              <div className="auth-input-wrap">
+              <div className="auth-input-wrap auth-input-wrap--password">
                 <span className="auth-input-icon" aria-hidden="true"><MiniIcon type="lock" /></span>
                 <input
                   value={confirmPassword}
@@ -410,7 +410,7 @@ export function TeacherAuthModal({
 
             <label>
               <span>סיסמה</span>
-              <div className="auth-input-wrap">
+              <div className="auth-input-wrap auth-input-wrap--password">
                 <span className="auth-input-icon" aria-hidden="true"><MiniIcon type="lock" /></span>
                 <input
                   value={password}

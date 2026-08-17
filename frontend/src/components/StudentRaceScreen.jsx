@@ -1,4 +1,4 @@
-import { Badge, Card } from "./ui/Primitives";
+import { Badge, Button, Card } from "./ui/Primitives";
 import { QuestionCard } from "./QuestionCard";
 
 const raceStatusLabels = {
@@ -20,10 +20,13 @@ export function StudentRaceScreen({
   racePaused,
   onAnswer,
   onChoosePath,
-  onSwapQuestion
+  onSwapQuestion,
+  onLeaveRace
 }) {
   const pct = Math.max(0, Math.min(100, (progress / 1000) * 100));
-  const isWaitingForStart = raceStatus === "LOBBY" || raceStatus === "LOCKED";
+  const isWaitingForStart = !raceStatus || raceStatus === "LOBBY" || raceStatus === "LOCKED";
+  const canLeave = Boolean(onLeaveRace) && raceStatus !== "FINISHED" && raceStatus !== "CANCELLED";
+  const leaveLabel = isWaitingForStart ? "ביטול הרשמה" : "יציאה מהמרוץ";
 
   return (
     <section className="stack student-race-screen">
@@ -35,15 +38,22 @@ export function StudentRaceScreen({
             </Badge>
             <h2>חדר {roomCode}</h2>
           </div>
-          <div className="student-race-stats">
-            <div>
-              <span className="muted">התקדמות</span>
-              <strong>{progress}/1000</strong>
+          <div className="student-race-top-actions">
+            <div className="student-race-stats">
+              <div>
+                <span className="muted">התקדמות</span>
+                <strong>{progress}/1000</strong>
+              </div>
+              <div>
+                <span className="muted">ניקוד</span>
+                <strong>{score}</strong>
+              </div>
             </div>
-            <div>
-              <span className="muted">ניקוד</span>
-              <strong>{score}</strong>
-            </div>
+            {canLeave ? (
+              <Button variant="ghost" size="sm" onClick={() => void onLeaveRace()}>
+                {leaveLabel}
+              </Button>
+            ) : null}
           </div>
         </div>
         <div className="student-progress-track">
@@ -57,6 +67,11 @@ export function StudentRaceScreen({
           <div className="waiting-icon" aria-hidden="true">⏳</div>
           <h3>נכנסת לחדר המרוץ</h3>
           <p>ממתין שהמורה יתחיל את המרוץ...</p>
+          {canLeave ? (
+            <Button variant="ghost" onClick={() => void onLeaveRace()}>
+              ביטול הרשמה
+            </Button>
+          ) : null}
         </Card>
       ) : null}
 

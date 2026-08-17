@@ -1,10 +1,18 @@
 import { useState } from "react";
 import { Badge, Button, Card, Input, PageHeader } from "./ui/Primitives";
 
+function visibleStudentEmail(email) {
+  if (!email || email.endsWith("@mathrace.local") || email.startsWith("guest.")) {
+    return null;
+  }
+  return email;
+}
+
 export function RaceLobby({
   roomCode,
   roomStatus,
   participants,
+  eventMessage,
   onApproveParticipant,
   onRejectParticipant,
   onRemoveParticipant,
@@ -50,6 +58,8 @@ export function RaceLobby({
         <div className="banner banner-warning">החדר ננעל - הגיע למכסת המשתתפים</div>
       ) : null}
 
+      {eventMessage ? <div className="banner banner-info">{eventMessage}</div> : null}
+
       <Card className="lobby-add-form">
         <h3>הוספת תלמיד לפי מייל</h3>
         <form onSubmit={addStudent} className="lobby-add-row">
@@ -73,24 +83,22 @@ export function RaceLobby({
           </div>
           {pending.length === 0 ? <p className="muted">אין תלמידים ממתינים כרגע.</p> : null}
           <div className="participant-list">
-            {pending.map((p) => (
-              <article key={p.participantId} className="participant-item">
-                <div className="participant-main">
-                  <span className="participant-avatar" style={{ background: p.carColor }} aria-hidden="true">🚗</span>
+            {pending.map((p) => {
+              const email = visibleStudentEmail(p.email);
+              return (
+                <article key={p.participantId} className="participant-item">
+                  <span className="participant-car" aria-hidden="true">🚗</span>
                   <div className="participant-identity">
                     <strong>{p.displayName}</strong>
-                    <small>{p.email || "לא הוזן מייל"}</small>
+                    {email ? <small>{email}</small> : null}
                   </div>
-                </div>
-                <div className="participant-meta">
-                  <span className="muted">מסלול {p.laneNo}</span>
                   <div className="participant-actions">
                     <Button size="sm" onClick={() => void onApproveParticipant(p.participantId)}>אשר</Button>
                     <Button variant="ghost" size="sm" onClick={() => void onRejectParticipant(p.participantId)}>דחה</Button>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         </Card>
 
@@ -101,26 +109,23 @@ export function RaceLobby({
           </div>
           {approved.length === 0 ? <p className="muted">עדיין אין תלמידים מאושרים.</p> : null}
           <div className="participant-list">
-            {approved.map((p) => (
-              <article key={p.participantId} className="participant-item">
-                <div className="participant-main">
-                  <span className="participant-avatar" style={{ background: p.carColor }} aria-hidden="true">🏎️</span>
+            {approved.map((p) => {
+              const email = visibleStudentEmail(p.email);
+              return (
+                <article key={p.participantId} className="participant-item">
+                  <span className="participant-car" aria-hidden="true">🏎️</span>
                   <div className="participant-identity">
                     <strong>{p.displayName}</strong>
-                    <small>{p.email || "לא הוזן מייל"}</small>
+                    {email ? <small>{email}</small> : null}
                   </div>
-                </div>
-                <div className="participant-meta">
-                  <span className="muted">מסלול {p.laneNo}</span>
                   <div className="participant-actions">
-                    <Badge variant="success">מאושר</Badge>
                     <Button variant="danger" size="sm" onClick={() => void onRemoveParticipant(p.participantId)}>
                       מחק
                     </Button>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         </Card>
       </div>
