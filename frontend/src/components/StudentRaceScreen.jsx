@@ -1,5 +1,8 @@
+import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Card } from "./ui/Primitives";
 import { QuestionCard } from "./QuestionCard";
+
+const DECISION_TIME_MS = 10000;
 
 const raceStatusLabels = {
   LOBBY: "ממתין להתחלה",
@@ -20,13 +23,46 @@ export function StudentRaceScreen({
   racePaused,
   onAnswer,
   onChoosePath,
+  onDecisionTimeout,
   onSwapQuestion,
   onLeaveRace
 }) {
+  const [decisionRemainingMs, setDecisionRemainingMs] = useState(DECISION_TIME_MS);
+  const decisionTimedOutRef = useRef(false);
   const pct = Math.max(0, Math.min(100, (progress / 1000) * 100));
   const isWaitingForStart = !raceStatus || raceStatus === "LOBBY" || raceStatus === "LOCKED";
+  const decisionEventActive = !isWaitingForStart && Boolean(pendingPathDecision);
   const canLeave = Boolean(onLeaveRace) && raceStatus !== "FINISHED" && raceStatus !== "CANCELLED";
   const leaveLabel = isWaitingForStart ? "ביטול הרשמה" : "יציאה מהמרוץ";
+  const decisionTimerPct = Math.max(0, Math.min(100, (decisionRemainingMs / DECISION_TIME_MS) * 100));
+  const decisionTimerDanger = decisionRemainingMs < 3000;
+
+  useEffect(() => {
+    if (!decisionEventActive) {
+      setDecisionRemainingMs(DECISION_TIME_MS);
+      decisionTimedOutRef.current = false;
+      return undefined;
+    }
+
+    setDecisionRemainingMs(DECISION_TIME_MS);
+    decisionTimedOutRef.current = false;
+    const interval = window.setInterval(() => {
+      setDecisionRemainingMs((prev) => Math.max(0, prev - 100));
+    }, 100);
+    return () => window.clearInterval(interval);
+  }, [decisionEventActive]);
+
+  useEffect(() => {
+    if (!decisionEventActive || decisionRemainingMs > 0 || decisionTimedOutRef.current) return;
+    decisionTimedOutRef.current = true;
+    void onDecisionTimeout?.();
+  }, [decisionEventActive, decisionRemainingMs, onDecisionTimeout]);
+
+  const chooseDecisionPath = (choice) => {
+    if (!decisionEventActive || decisionTimedOutRef.current) return;
+    decisionTimedOutRef.current = true;
+    void onChoosePath(choice);
+  };
 
   return (
     <section className="stack student-race-screen">
@@ -79,16 +115,23 @@ export function StudentRaceScreen({
         <div className="banner banner-warning student-paused">המרוץ הושהה על ידי המורה. המתן להמשך...</div>
       ) : null}
 
-      {!isWaitingForStart && pendingPathDecision ? (
+      {decisionEventActive ? (
         <Card className="path-choice premium-path-choice">
-          <h3>צומת - בחר מסלול</h3>
+          <div className="question-card-top">
+            <h3>צומת - בחר מסלול</h3>
+            <div className={`question-timer ${decisionTimerDanger ? "danger" : ""}`} aria-live="polite">
+              <div className="question-timer-ring" style={{ background: `conic-gradient(var(--color-accent) ${decisionTimerPct}%, rgba(255,255,255,0.08) 0)` }} />
+              <strong>{Math.ceil(decisionRemainingMs / 1000)}</strong>
+              <span>שניות</span>
+            </div>
+          </div>
           <p className="muted">אוטוסטרדה = סיכון גבוה ותגמול גדול. דרך עפר = יציב ואיטי יותר.</p>
           <div className="path-choice-grid">
-            <button type="button" className="highway-btn" onClick={() => void onChoosePath("HIGHWAY")}>
+            <button type="button" className="highway-btn" onClick={() => chooseDecisionPath("HIGHWAY")}>
               <strong>אוטוסטרדה</strong>
               <span>שאלה קשה · בונוס ענק</span>
             </button>
-            <button type="button" className="dirt-btn" onClick={() => void onChoosePath("DIRT_ROAD")}>
+            <button type="button" className="dirt-btn" onClick={() => chooseDecisionPath("DIRT_ROAD")}>
               <strong>דרך עפר</strong>
               <span>3 שאלות קלות · התקדמות בטוחה</span>
             </button>
@@ -97,15 +140,18 @@ export function StudentRaceScreen({
       ) : null}
 
       {!isWaitingForStart && !racePaused && question ? (
-        <QuestionCard
-          question={question}
-          onAnswer={onAnswer}
-          onSwap={onSwapQuestion}
-          feedback={answerFeedback}
-        />
+        <div style={{ display: decisionEventActive ? "none" : "block" }} aria-hidden={decisionEventActive}>
+          <QuestionCard
+            question={question}
+            onAnswer={onAnswer}
+            onSwap={onSwapQuestion}
+            feedback={answerFeedback}
+            paused={decisionEventActive}
+          />
+        </div>
       ) : null}
 
-      {!isWaitingForStart && !racePaused && !question && !pendingPathDecision ? (
+      {!isWaitingForStart && !racePaused && !question && !decisionEventActive ? (
         <Card className="waiting-card premium-waiting">
           <div className="waiting-icon" aria-hidden="true">∑</div>
           <p>ממתין לשאלה הבאה...</p>

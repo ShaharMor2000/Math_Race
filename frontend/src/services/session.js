@@ -19,6 +19,9 @@ export const session = {
     const value = localStorage.getItem(TEACHER_ID_KEY);
     return value ? Number(value) : null;
   },
+  hasValidTeacherSession() {
+    return Boolean(this.getTeacherToken() && this.getTeacherId());
+  },
   clearTeacher() {
     localStorage.removeItem(TEACHER_TOKEN_KEY);
     localStorage.removeItem(TEACHER_ID_KEY);

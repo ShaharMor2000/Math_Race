@@ -73,7 +73,7 @@ public class GameEngineService {
     private final Random random = new Random();
 
     @Transactional
-    public void startRace(String roomCode) {
+    public RaceRoom startRace(String roomCode) {
         RaceRoom room = raceRoomService.startRace(roomCode);
         GameSession session = new GameSession();
         session.setRoomId(room.getId());
@@ -84,7 +84,12 @@ public class GameEngineService {
             .filter(p -> p.getParticipantStatus() == ParticipantStatus.ACTIVE)
             .forEach(p -> session.getParticipants().put(p.getId(), runtimeStateService.load(p)));
         sessions.put(room.getId(), session);
-        sseEventPublisher.publish(room.getRoomCode(), "race_started", Map.of("status", "RUNNING"));
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("status", RaceRoomStatus.RUNNING.name());
+        payload.put("startAt", room.getStartAt());
+        payload.put("raceDurationMinutes", room.getRaceDurationMinutes());
+        sseEventPublisher.publishAfterCommit(room.getRoomCode(), "race_started", payload);
+        return room;
     }
 
     @Transactional

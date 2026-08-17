@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -33,6 +34,17 @@ public class GlobalExceptionHandler {
         String message = fieldErrors.values().stream().findFirst().orElse("פרטי ההרשמה אינם תקינים");
         return ResponseEntity.badRequest()
             .body(new ErrorResponse("VALIDATION_ERROR", message, fieldErrors));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        return ResponseEntity
+            .status(HttpStatus.METHOD_NOT_ALLOWED)
+            .body(new ErrorResponse(
+                "METHOD_NOT_ALLOWED",
+                "הפעולה אינה נתמכת בכתובת הזו",
+                Map.of("method", ex.getMethod(), "supportedMethods", ex.getSupportedMethods())
+            ));
     }
 
     @ExceptionHandler(Exception.class)

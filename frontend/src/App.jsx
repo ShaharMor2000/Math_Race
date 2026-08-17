@@ -19,8 +19,8 @@ import { session } from "./services/session";
 function App() {
   const { roomCode: joinRoomCode } = useParams();
   const [theme, setTheme] = useState(() => localStorage.getItem("mathRaceTheme") || "dark");
-  const [role, setRole] = useState(() => (session.getTeacherId() ? "teacher" : "student"));
-  const [teacherId, setTeacherId] = useState(session.getTeacherId());
+  const [role, setRole] = useState(() => (session.hasValidTeacherSession() ? "teacher" : "student"));
+  const [teacherId, setTeacherId] = useState(() => (session.hasValidTeacherSession() ? session.getTeacherId() : null));
   const [rooms, setRooms] = useState([]);
   const [isCreatingRace, setIsCreatingRace] = useState(false);
   const [isEditingRace, setIsEditingRace] = useState(false);
@@ -59,6 +59,8 @@ function App() {
   const [toast, setToast] = useState(null);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [pendingLogout, setPendingLogout] = useState(null);
+  const [raceRemovalCandidate, setRaceRemovalCandidate] = useState(null);
+  const [removingRoomCode, setRemovingRoomCode] = useState(null);
   const [teacherAuthOpen, setTeacherAuthOpen] = useState(false);
   const [studentAlert, setStudentAlert] = useState(null);
 
@@ -79,10 +81,32 @@ function App() {
     }
   }, [showToast]);
 
+  const clearInvalidTeacherSession = useCallback(() => {
+    session.clearTeacher();
+    setTeacherId(null);
+    setRole("student");
+    setTeacherAuthOpen(true);
+    setRooms([]);
+    setTeacherError("");
+  }, []);
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("mathRaceTheme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    const handleInvalidTeacherAuth = () => {
+      setTeacherId(null);
+      setRole("student");
+      setTeacherAuthOpen(true);
+      setRooms([]);
+      setTeacherError("");
+      resetTeacherFlow();
+    };
+    window.addEventListener("mathrace:teacher-auth-invalid", handleInvalidTeacherAuth);
+    return () => window.removeEventListener("mathrace:teacher-auth-invalid", handleInvalidTeacherAuth);
+  }, []);
 
   const toggleTheme = () => {
     setTheme((current) => (current === "dark" ? "light" : "dark"));
@@ -155,6 +179,11 @@ function App() {
       setStudentQuestion(q);
     } catch (error) {
       const message = String(error?.message || "");
+      const code = String(error?.code || "");
+      if ((code === "ROOM_NOT_RUNNING" || message.includes("ROOM_NOT_RUNNING")) && attempt < 5) {
+        window.setTimeout(() => void fetchNextQuestion(roomCode, attempt + 1), 300 * (attempt + 1));
+        return;
+      }
       if (message.includes("VEHICLE_FROZEN") && attempt < 4) {
         setStudentEventMessage("הרכב נעצר לרגע אחרי כישלון באוטוסטרדה...");
         window.setTimeout(() => void fetchNextQuestion(roomCode, attempt + 1), 3000);
@@ -162,6 +191,57 @@ function App() {
       }
     }
   }, []);
+
+  const applyStudentRoomState = useCallback((state) => {
+    const status = state?.status || state?.raceStatus;
+    const participantStatus = state?.participantStatus;
+    if (status) {
+      setStudentRoomStatus(status);
+      setStudentRacePaused(status === "PAUSED");
+    }
+    if (participantStatus) {
+      setStudentParticipantStatus(participantStatus);
+      session.saveStudent(
+        session.getStudentToken(),
+        studentParticipantId,
+        studentRoomCode,
+        participantStatus,
+        studentDisplayName
+      );
+    }
+    if (Number.isFinite(Number(state?.progress))) {
+      setStudentProgress(Number(state.progress));
+    }
+    if (Number.isFinite(Number(state?.score))) {
+      setStudentScore(Number(state.score));
+    }
+
+    const effectiveParticipantStatus = participantStatus || studentParticipantStatus;
+    if (studentRoomCode && effectiveParticipantStatus === "ACTIVE") {
+      if (status === "RUNNING") {
+        setStudentRacePaused(false);
+        setStudentView("race");
+        if (!studentQuestion) {
+          void fetchNextQuestion(studentRoomCode);
+        }
+      } else if (status === "PAUSED") {
+        setStudentView("race");
+      }
+    }
+  }, [fetchNextQuestion, studentDisplayName, studentParticipantId, studentParticipantStatus, studentQuestion, studentRoomCode]);
+
+  const syncStudentRoomSummary = useCallback(async () => {
+    if (!studentRoomCode) return;
+    const races = await api.listStudentRaces(session.getGuestEmail());
+    const current = races.find((race) => race.roomCode === studentRoomCode);
+    if (!current) return;
+    applyStudentRoomState({
+      status: current.raceStatus,
+      participantStatus: current.participantStatus,
+      progress: current.progressPoints,
+      score: current.scoreTotal
+    });
+  }, [applyStudentRoomState, studentRoomCode]);
 
   useEffect(() => {
     if (role !== "student" || !studentRoomCode || studentParticipantStatus !== "ACTIVE") return;
@@ -176,11 +256,25 @@ function App() {
 
   useEffect(() => {
     if (!studentRoomCode || !studentParticipantId || studentParticipantStatus !== "ACTIVE") return;
+    if (studentRoomStatus !== "RUNNING") return;
     if (studentQuestion || studentFinalRows) return;
     void fetchNextQuestion(studentRoomCode);
-  }, [studentRoomCode, studentParticipantId, studentParticipantStatus, studentQuestion, studentFinalRows, fetchNextQuestion]);
+  }, [studentRoomCode, studentParticipantId, studentParticipantStatus, studentRoomStatus, studentQuestion, studentFinalRows, fetchNextQuestion]);
+
+  useEffect(() => {
+    if (role !== "student" || !studentRoomCode || !studentParticipantId || studentFinalRows) return;
+    void syncStudentRoomSummary().catch(() => {});
+    const timer = window.setInterval(() => {
+      void syncStudentRoomSummary().catch(() => {});
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [role, studentRoomCode, studentParticipantId, studentFinalRows, syncStudentRoomSummary]);
 
   const refreshTeacherRooms = async () => {
+    if (!session.hasValidTeacherSession()) {
+      clearInvalidTeacherSession();
+      return;
+    }
     try {
       const list = await api.listTeacherRaces();
       setRooms(list);
@@ -315,6 +409,33 @@ function App() {
     }
   };
 
+  const syncTeacherRoomDetails = useCallback(async (roomCode) => {
+    if (!roomCode) return;
+    const detail = await api.roomDetails(roomCode);
+    setRoomMeta(detail);
+    setParticipants(detail.participants);
+
+    if (detail.status === "RUNNING" || detail.status === "PAUSED") {
+      const board = await api.leaderboard(roomCode);
+      setLeaderboard(board);
+    } else if (detail.status === "FINISHED") {
+      const results = await api.finalResults(roomCode);
+      setTeacherFinalRows(results.leaderboard);
+      setTeacherWinnerName(results.winnerName);
+      setLeaderboard([]);
+    } else {
+      setLeaderboard([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (role !== "teacher" || !teacherId || !activeRoomCode || teacherFinalRows) return;
+    const timer = window.setInterval(() => {
+      void syncTeacherRoomDetails(activeRoomCode).catch(() => {});
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [activeRoomCode, role, syncTeacherRoomDetails, teacherFinalRows, teacherId]);
+
   const openTeacherRoom = async (roomCode) => {
     setTeacherError("");
     setOpeningRoomCode(roomCode);
@@ -414,6 +535,38 @@ function App() {
     }, "התלמיד נמחק");
   };
 
+  const requestRaceRemoval = (room) => {
+    if (room.status === "RUNNING") {
+      showToast("לא ניתן להסיר מירוץ שרץ כרגע");
+      return;
+    }
+    setRaceRemovalCandidate(room);
+  };
+
+  const cancelRaceRemoval = () => {
+    setRaceRemovalCandidate(null);
+  };
+
+  const confirmRaceRemoval = async () => {
+    const room = raceRemovalCandidate;
+    if (!room?.roomCode) return;
+    setRemovingRoomCode(room.roomCode);
+    try {
+      await api.deleteRace(room.roomCode);
+      setRooms((prev) => prev.filter((item) => item.roomCode !== room.roomCode));
+      if (lastCreatedRoomCode === room.roomCode) {
+        setLastCreatedRoomCode(null);
+      }
+      await refreshTeacherRooms();
+      showToast("המירוץ הוסר", "success");
+      setRaceRemovalCandidate(null);
+    } catch (error) {
+      showToast(error.message || "לא ניתן להסיר את המירוץ");
+    } finally {
+      setRemovingRoomCode(null);
+    }
+  };
+
   const addStudent = async (email) => {
     if (!activeRoomCode) return;
     await runAction(async () => {
@@ -463,7 +616,7 @@ function App() {
   }, [role]);
 
   const answerQuestion = async (answer, responseTimeMs) => {
-    if (!studentRoomCode || !studentParticipantId || !studentQuestion || studentRacePaused) return;
+    if (!studentRoomCode || !studentParticipantId || !studentQuestion || studentRacePaused || pendingPathDecision) return;
     try {
       const res = await api.submitAnswer(studentRoomCode, {
         questionId: studentQuestion.questionId,
@@ -487,8 +640,6 @@ function App() {
       setPendingPathDecision(hasPathDecision);
       if (!hasPathDecision) {
         await fetchNextQuestion(studentRoomCode);
-      } else {
-        setStudentQuestion(null);
       }
     } catch (error) {
       const message = String(error?.message || "");
@@ -521,7 +672,7 @@ function App() {
   };
 
   const swapQuestion = async () => {
-    if (!studentRoomCode || !studentQuestion) return;
+    if (!studentRoomCode || !studentQuestion || pendingPathDecision) return;
     try {
       const q = await api.swapQuestion(studentRoomCode, studentQuestion.questionId);
       setStudentQuestion(q);
@@ -532,15 +683,27 @@ function App() {
   };
 
   const choosePath = async (choice) => {
-    if (!studentRoomCode || !studentParticipantId) return;
+    if (!studentRoomCode || !studentParticipantId || !pendingPathDecision) return;
+    setPendingPathDecision(false);
     try {
       await api.choosePath(studentRoomCode, choice);
-      setPendingPathDecision(false);
-      await fetchNextQuestion(studentRoomCode);
     } catch (error) {
       showToast(error.message || "בחירת המסלול נכשלה");
     }
   };
+
+  const finishPathDecisionByTimeout = useCallback(async () => {
+    if (!studentRoomCode || !studentParticipantId) {
+      setPendingPathDecision(false);
+      return;
+    }
+    setPendingPathDecision(false);
+    try {
+      await api.choosePath(studentRoomCode, "NORMAL");
+    } catch {
+      // If the backend no longer has a pending decision, the UI can still resume the current question.
+    }
+  }, [studentParticipantId, studentRoomCode]);
 
   const logoutTeacher = () => {
     session.clearTeacher();
@@ -663,11 +826,13 @@ function App() {
       else setStudentEventMessage(msg);
     }
     if (event.type === "registration_requested" && role === "teacher" && activeRoomCode) {
-      void loadRoomDetails(activeRoomCode);
+      void syncTeacherRoomDetails(activeRoomCode);
+      void refreshTeacherRooms();
     }
     if (event.type === "registration_approved") {
       if (role === "teacher" && activeRoomCode) {
-        void loadRoomDetails(activeRoomCode);
+        void syncTeacherRoomDetails(activeRoomCode);
+        void refreshTeacherRooms();
       }
       if (studentParticipantId && Number(payload.participantId) === studentParticipantId) {
         setStudentParticipantStatus("ACTIVE");
@@ -696,7 +861,8 @@ function App() {
         setParticipants((prev) => prev.filter((p) => p.participantId !== rejectedId));
       }
       if (role === "teacher" && activeRoomCode) {
-        void loadRoomDetails(activeRoomCode);
+        void syncTeacherRoomDetails(activeRoomCode);
+        void refreshTeacherRooms();
       }
       if (studentParticipantId && rejectedId === studentParticipantId) {
         resetStudentFlow();
@@ -712,24 +878,50 @@ function App() {
         setParticipants((prev) => prev.filter((p) => p.participantId !== leftId));
       }
       if (role === "teacher" && activeRoomCode) {
-        void loadRoomDetails(activeRoomCode);
+        void syncTeacherRoomDetails(activeRoomCode);
         void refreshTeacherRooms();
         const name = payload.displayName ? String(payload.displayName) : "תלמיד";
         pushTeacherEvent("registration_cancelled", `${name} ביטל/ה את ההרשמה`);
         showToast(`${name} ביטל/ה את ההרשמה`, "info");
       }
     }
+    if (event.type === "room_state") {
+      if (role === "teacher") {
+        setRoomMeta((prev) =>
+          prev && payload.status
+            ? {
+                ...prev,
+                status: payload.status,
+                startAt: payload.startAt ?? prev.startAt,
+                raceDurationMinutes: payload.raceDurationMinutes ?? prev.raceDurationMinutes
+              }
+            : prev
+        );
+      }
+      if (role === "student") {
+        applyStudentRoomState(payload);
+      }
+    }
     if (event.type === "race_started") {
       if (role === "teacher") {
         pushTeacherEvent("race_started", "המרוץ התחיל!");
-        setRoomMeta((prev) => (prev ? { ...prev, status: "RUNNING" } : prev));
-        if (activeRoomCode) void loadRoomDetails(activeRoomCode);
+        setRoomMeta((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "RUNNING",
+                startAt: payload.startAt ?? prev.startAt,
+                raceDurationMinutes: payload.raceDurationMinutes ?? prev.raceDurationMinutes
+              }
+            : prev
+        );
+        if (activeRoomCode) void syncTeacherRoomDetails(activeRoomCode);
       }
-      if (role === "student") setStudentRoomStatus("RUNNING");
-      if (studentRoomCode && studentParticipantId && studentParticipantStatus === "ACTIVE") {
-        setStudentRacePaused(false);
-        setStudentView("race");
-        void fetchNextQuestion(studentRoomCode);
+      if (role === "student") {
+        applyStudentRoomState({
+          ...payload,
+          status: "RUNNING"
+        });
       }
     }
     if (event.type === "room_locked") {
@@ -741,14 +933,14 @@ function App() {
       if (role === "student") setStudentRoomStatus("LOBBY");
     }
     if (event.type === "race_paused") {
-      if (activeRoomCode) void loadRoomDetails(activeRoomCode);
+      if (activeRoomCode) void syncTeacherRoomDetails(activeRoomCode);
       if (role === "student") {
         setStudentRoomStatus("PAUSED");
         setStudentRacePaused(true);
       }
     }
     if (event.type === "race_resumed") {
-      if (activeRoomCode) void loadRoomDetails(activeRoomCode);
+      if (activeRoomCode) void syncTeacherRoomDetails(activeRoomCode);
       if (role === "student") {
         setStudentRoomStatus("RUNNING");
         setStudentRacePaused(false);
@@ -787,6 +979,16 @@ function App() {
         danger
         onConfirm={confirmLogout}
         onCancel={cancelLogout}
+      />
+      <ConfirmDialog
+        open={Boolean(raceRemovalCandidate)}
+        title="הסרת מירוץ"
+        message="האם אתה בטוח שברצונך להסיר את המירוץ?"
+        confirmText="הסר"
+        cancelText="ביטול"
+        danger
+        onConfirm={confirmRaceRemoval}
+        onCancel={cancelRaceRemoval}
       />
       <ConfirmDialog
         open={Boolean(studentAlert)}
@@ -847,9 +1049,11 @@ function App() {
               rooms={rooms}
               lastCreatedRoomCode={lastCreatedRoomCode}
               openingRoomCode={openingRoomCode}
+              removingRoomCode={removingRoomCode}
               errorMessage={teacherError}
               onCreateRace={() => setIsCreatingRace(true)}
               onOpenRoom={(roomCode) => void openTeacherRoom(roomCode)}
+              onRemoveRoom={requestRaceRemoval}
             />
           ) : null}
 
@@ -960,6 +1164,7 @@ function App() {
               racePaused={studentRacePaused}
               onAnswer={answerQuestion}
               onChoosePath={choosePath}
+              onDecisionTimeout={finishPathDecisionByTimeout}
               onSwapQuestion={swapQuestion}
               onLeaveRace={leaveStudentRace}
             />

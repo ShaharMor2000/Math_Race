@@ -27,7 +27,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -77,6 +76,16 @@ public class TeacherRaceController {
         return raceRoomService.getRoomDetails(principal.teacherId(), roomCode);
     }
 
+    @DeleteMapping("/{roomCode}")
+    public Map<String, Object> archiveRace(HttpServletRequest request, @PathVariable String roomCode) {
+        AuthPrincipal principal = AuthSupport.requireTeacher(request);
+        RaceRoom room = raceRoomService.archiveRace(principal.teacherId(), roomCode);
+        return Map.of(
+            "roomCode", room.getRoomCode(),
+            "status", "ARCHIVED"
+        );
+    }
+
     @PostMapping("/{roomCode}/students")
     @ResponseStatus(HttpStatus.CREATED)
     public Map<String, Object> addStudent(
@@ -99,8 +108,13 @@ public class TeacherRaceController {
         AuthPrincipal principal = AuthSupport.requireTeacher(request);
         RaceRoom room = raceRoomService.getByRoomCodeOrThrow(roomCode);
         raceRoomService.ensureTeacherOwnsRoom(principal.teacherId(), room);
-        gameEngineService.startRace(roomCode);
-        return Map.of("roomCode", roomCode.toUpperCase(), "status", "RUNNING", "startedAt", LocalDateTime.now());
+        RaceRoom startedRoom = gameEngineService.startRace(roomCode);
+        return Map.of(
+            "roomCode", startedRoom.getRoomCode(),
+            "status", startedRoom.getStatus().name(),
+            "startedAt", startedRoom.getStartAt(),
+            "raceDurationMinutes", startedRoom.getRaceDurationMinutes()
+        );
     }
 
     @PostMapping("/{roomCode}/pause")

@@ -26,6 +26,7 @@ public interface RaceParticipantRepository extends JpaRepository<RaceParticipant
         join fetch p.student s
         join fetch p.raceRoom r
         where lower(s.email) = lower(:email)
+        and r.archivedAt is null
         order by p.createdAt desc
         """)
     List<RaceParticipant> findStudentRaceSummaries(@Param("email") String email);

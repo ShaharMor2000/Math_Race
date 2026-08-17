@@ -76,7 +76,7 @@ public class RaceRoomService {
         Teacher teacher = teacherRepository.findById(teacherId)
             .orElseThrow(() -> new ApiException("TEACHER_NOT_FOUND", "המורה לא נמצא"));
 
-        return raceRoomRepository.findByTeacherOrderByCreatedAtDesc(teacher).stream()
+        return raceRoomRepository.findByTeacherAndArchivedAtIsNullOrderByCreatedAtDesc(teacher).stream()
             .map(room -> {
                 long pending = raceParticipantRepository.countByRaceRoomAndParticipantStatus(room, ParticipantStatus.PENDING);
                 long approved = raceParticipantRepository.countByRaceRoomAndParticipantStatus(room, ParticipantStatus.ACTIVE);
@@ -96,8 +96,19 @@ public class RaceRoomService {
 
     @Transactional(readOnly = true)
     public RaceRoom getByRoomCodeOrThrow(String roomCode) {
-        return raceRoomRepository.findByRoomCode(roomCode.trim().toUpperCase(Locale.ROOT))
+        return raceRoomRepository.findByRoomCodeAndArchivedAtIsNull(roomCode.trim().toUpperCase(Locale.ROOT))
             .orElseThrow(() -> new ApiException("ROOM_NOT_FOUND", "החדר לא נמצא"));
+    }
+
+    @Transactional
+    public RaceRoom archiveRace(Long teacherId, String roomCode) {
+        RaceRoom room = getByRoomCodeOrThrow(roomCode);
+        ensureTeacherOwnsRoom(teacherId, room);
+        if (room.getStatus() == RaceRoomStatus.RUNNING) {
+            throw new ApiException("ROOM_RUNNING", "לא ניתן להסיר מירוץ שרץ כרגע");
+        }
+        room.setArchivedAt(LocalDateTime.now());
+        return raceRoomRepository.save(room);
     }
 
     @Transactional(readOnly = true)
@@ -272,7 +283,7 @@ public class RaceRoomService {
 
     @Transactional(readOnly = true)
     public List<OpenRaceRoomResponse> listOpenRaces() {
-        return raceRoomRepository.findByStatusInOrderByCreatedAtDesc(List.of(RaceRoomStatus.LOBBY, RaceRoomStatus.LOCKED)).stream()
+        return raceRoomRepository.findByStatusInAndArchivedAtIsNullOrderByCreatedAtDesc(List.of(RaceRoomStatus.LOBBY, RaceRoomStatus.LOCKED)).stream()
             .map(room -> {
                 long registered = countRegisteredParticipants(room);
                 return new OpenRaceRoomResponse(

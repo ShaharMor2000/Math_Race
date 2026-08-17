@@ -16,6 +16,7 @@ export function createRoomStream(roomCode, onEvent, options = {}) {
 
   const eventNames = [
     "heartbeat",
+    "room_state",
     "race_started",
     "race_paused",
     "race_resumed",

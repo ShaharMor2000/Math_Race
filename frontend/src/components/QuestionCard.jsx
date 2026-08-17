@@ -1,32 +1,39 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Card } from "./ui/Primitives";
 
-export function QuestionCard({ question, onAnswer, onSwap, feedback }) {
+export function QuestionCard({ question, onAnswer, onSwap, feedback, paused = false }) {
   const [remainingMs, setRemainingMs] = useState(question.maxTimeMs);
   const [submitting, setSubmitting] = useState(false);
-  const startedAt = useMemo(() => Date.now(), [question.questionId]);
+  const activeElapsedMsRef = useRef(0);
   const timedOutRef = useRef(false);
   const timerPct = Math.max(0, Math.min(100, (remainingMs / question.maxTimeMs) * 100));
 
   useEffect(() => {
     setRemainingMs(question.maxTimeMs);
+    activeElapsedMsRef.current = 0;
     timedOutRef.current = false;
-    const interval = window.setInterval(() => {
-      setRemainingMs((prev) => Math.max(0, prev - 100));
-    }, 100);
-    return () => window.clearInterval(interval);
   }, [question.questionId, question.maxTimeMs]);
 
   useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (paused) return;
+      activeElapsedMsRef.current = Math.min(question.maxTimeMs, activeElapsedMsRef.current + 100);
+      setRemainingMs((prev) => Math.max(0, prev - 100));
+    }, 100);
+    return () => window.clearInterval(interval);
+  }, [paused, question.maxTimeMs]);
+
+  useEffect(() => {
+    if (paused) return;
     if (remainingMs > 0 || submitting || timedOutRef.current) return;
     timedOutRef.current = true;
-    void submit("");
-  }, [remainingMs, submitting]);
+    void submit("", question.maxTimeMs + 1);
+  }, [remainingMs, submitting, paused]);
 
-  const submit = async (answer) => {
+  const submit = async (answer, responseTimeOverrideMs = null) => {
     if (submitting) return;
     setSubmitting(true);
-    const responseTimeMs = Date.now() - startedAt;
+    const responseTimeMs = responseTimeOverrideMs ?? Math.min(question.maxTimeMs, activeElapsedMsRef.current);
     try {
       await onAnswer(answer, responseTimeMs);
     } finally {
@@ -67,7 +74,7 @@ export function QuestionCard({ question, onAnswer, onSwap, feedback }) {
             key={option}
             variant="secondary"
             className="question-option-btn"
-            disabled={submitting || remainingMs === 0}
+            disabled={paused || submitting || remainingMs === 0}
             onClick={() => void submit(option)}
           >
             {option}
@@ -76,7 +83,7 @@ export function QuestionCard({ question, onAnswer, onSwap, feedback }) {
       </div>
 
       {question.swapAvailable ? (
-        <Button variant="ghost" className="swap-btn" disabled={submitting} onClick={() => void onSwap?.()}>
+        <Button variant="ghost" className="swap-btn" disabled={paused || submitting} onClick={() => void onSwap?.()}>
           החלף שאלה
         </Button>
       ) : null}

@@ -144,10 +144,15 @@ async function request(path, options = {}) {
     error.responseBody = parsedError || errBody;
     if (parsedError?.code) error.code = parsedError.code;
     if (parsedError?.details) error.details = parsedError.details;
+    if ((response.status === 401 || parsedError?.code === "UNAUTHORIZED") && options.useTeacherAuth !== false) {
+      session.clearTeacher();
+      window.dispatchEvent(new CustomEvent("mathrace:teacher-auth-invalid"));
+    }
     throw error;
   }
 
-  return response.json();
+  const responseText = await response.text();
+  return responseText ? JSON.parse(responseText) : null;
 }
 
 export const api = {
@@ -224,6 +229,11 @@ export const api = {
     request(`/teacher/races/${roomCode}`, {
       method: "PUT",
       body: JSON.stringify(payload)
+    }),
+
+  deleteRace: (roomCode) =>
+    request(`/teacher/races/${roomCode}`, {
+      method: "DELETE"
     }),
 
   listTeacherRaces: () => request("/teacher/races"),

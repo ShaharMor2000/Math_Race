@@ -3807,7 +3807,18 @@ button.ghost:hover:not(:disabled) {
 
 .room-card-action-btn {
   align-self: flex-start;
+}
+
+.room-card-actions {
   margin-top: auto;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.room-card-actions .room-card-action-btn {
+  margin-top: 0;
 }
 
 .student-score-pill {

@@ -26,12 +26,23 @@ function matchesRoomFilter(room, filter) {
   return true;
 }
 
-export function TeacherDashboard({ rooms, lastCreatedRoomCode, openingRoomCode, errorMessage, onCreateRace, onOpenRoom }) {
+export function TeacherDashboard({
+  rooms,
+  lastCreatedRoomCode,
+  openingRoomCode,
+  removingRoomCode,
+  errorMessage,
+  onCreateRace,
+  onOpenRoom,
+  onRemoveRoom
+}) {
   const [roomFilter, setRoomFilter] = useState("all");
 
   const activeRooms = rooms.filter((room) => ACTIVE_STATUSES.includes(room.status)).length;
   const pendingParticipants = rooms.reduce((sum, room) => sum + Number(room.pendingParticipants || 0), 0);
-  const filteredRooms = rooms.filter((room) => matchesRoomFilter(room, roomFilter));
+  const filteredRooms = rooms
+    .filter((room) => matchesRoomFilter(room, roomFilter))
+    .map((room) => (room.status === "RUNNING" ? { ...room, approvedParticipants: 0 } : room));
 
   const emptyCopy = {
     all: {
@@ -123,18 +134,29 @@ export function TeacherDashboard({ rooms, lastCreatedRoomCode, openingRoomCode, 
                 משתתפים: {room.participants || 0}
                 {Number(room.approvedParticipants || 0) > 0 ? ` · מאושרים: ${room.approvedParticipants}` : ""}
               </span>
-              <Button
-                className="room-card-action-btn"
-                size="sm"
-                onClick={() => onOpenRoom(room.roomCode)}
-                disabled={openingRoomCode === room.roomCode}
-              >
-                {openingRoomCode === room.roomCode
-                  ? "פותח..."
-                  : FINISHED_STATUSES.includes(room.status)
-                    ? "תצוגת מידע"
-                    : "ניהול מרוץ"}
-              </Button>
+              <div className="room-card-actions">
+                <Button
+                  className="room-card-action-btn"
+                  size="sm"
+                  onClick={() => onOpenRoom(room.roomCode)}
+                  disabled={openingRoomCode === room.roomCode || removingRoomCode === room.roomCode}
+                >
+                  {openingRoomCode === room.roomCode
+                    ? "פותח..."
+                    : FINISHED_STATUSES.includes(room.status)
+                      ? "תצוגת מידע"
+                      : "ניהול מרוץ"}
+                </Button>
+                <Button
+                  className="room-card-action-btn"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onRemoveRoom?.(room)}
+                  disabled={openingRoomCode === room.roomCode || removingRoomCode === room.roomCode}
+                >
+                  {removingRoomCode === room.roomCode ? "מסיר..." : "הסר"}
+                </Button>
+              </div>
             </article>
           ))}
         </div>

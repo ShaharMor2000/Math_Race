@@ -13,8 +13,11 @@ public interface RaceRoomRepository extends JpaRepository<RaceRoom, Long> {
     @EntityGraph(attributePaths = "teacher")
     Optional<RaceRoom> findByRoomCode(String roomCode);
 
-    List<RaceRoom> findByTeacherOrderByCreatedAtDesc(Teacher teacher);
+    @EntityGraph(attributePaths = "teacher")
+    Optional<RaceRoom> findByRoomCodeAndArchivedAtIsNull(String roomCode);
+
+    List<RaceRoom> findByTeacherAndArchivedAtIsNullOrderByCreatedAtDesc(Teacher teacher);
     List<RaceRoom> findByStatusOrderByCreatedAtDesc(RaceRoomStatus status);
 
-    List<RaceRoom> findByStatusInOrderByCreatedAtDesc(List<RaceRoomStatus> statuses);
+    List<RaceRoom> findByStatusInAndArchivedAtIsNullOrderByCreatedAtDesc(List<RaceRoomStatus> statuses);
 }

@@ -30,6 +30,10 @@ public class SseEventPublisher {
         return emitter;
     }
 
+    public void sendTo(SseEmitter emitter, String roomCode, String eventType, Map<String, Object> payload) {
+        send(emitter, eventType, new StreamEventDto(roomCode, eventType, LocalDateTime.now(), payload));
+    }
+
     public void publish(String roomCode, String eventType, Map<String, Object> payload) {
         publish(roomCode, eventType, payload, null);
     }
