@@ -547,6 +547,25 @@ body {
   border-color: var(--chip-hover-border);
 }
 
+.auth-link-button {
+  align-self: center;
+  margin-top: 2px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.auth-link-button:hover:not(:disabled) {
+  transform: none;
+  background: transparent;
+  color: var(--color-text);
+}
+
 .student-home-actions {
   display: flex;
   flex-wrap: wrap;
@@ -811,7 +830,45 @@ body {
   border-radius: 12px;
   background: #111111;
   color: #fca5a5;
+  direction: rtl;
   line-height: 1.45;
+  text-align: right;
+}
+
+.auth-success,
+.auth-helper {
+  margin: 14px 0 0;
+  text-align: right;
+  line-height: 1.45;
+}
+
+.auth-success {
+  padding: 12px 14px;
+  border: 1px solid rgba(52, 211, 153, 0.22);
+  border-radius: 12px;
+  background: rgba(52, 211, 153, 0.1);
+  color: #bbf7d0;
+  font-weight: 750;
+}
+
+.auth-helper {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.reset-password-card {
+  text-align: right;
+}
+
+.reset-password-form {
+  margin-top: 22px;
+}
+
+.reset-login-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
 }
 
 .app {
@@ -3644,4 +3701,386 @@ button.ghost:hover:not(:disabled) {
 
 .student-race-card.surface-card {
   padding: 16px;
+}
+
+.student-home .empty-state {
+  max-width: 520px;
+  padding: 22px 24px;
+  gap: 9px;
+}
+
+.student-home .empty-state-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 2px;
+  border-radius: 14px;
+  background: rgba(79, 140, 255, 0.13);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #dbe8ff;
+  font-size: 0;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.student-home .empty-state-icon::before {
+  content: "Σ";
+  font-size: 26px;
+}
+
+.student-home .empty-state h3 {
+  font-size: 22px;
+}
+
+.student-home .empty-state p {
+  max-width: 360px;
+}
+
+/* Home screen refinement */
+:root[data-theme="dark"] {
+  --color-bg: #132033;
+  --color-bg-elevated: #18283f;
+  --color-surface: rgba(28, 43, 66, 0.82);
+  --color-surface-strong: rgba(34, 51, 76, 0.94);
+  --color-border: rgba(255, 255, 255, 0.14);
+  --color-border-strong: rgba(255, 255, 255, 0.24);
+  --color-text-muted: #c2cee0;
+  --color-text-subtle: #91a3ba;
+}
+
+:root[data-theme="dark"] .app-shell {
+  background:
+    radial-gradient(circle at 16% 18%, rgba(72, 220, 255, 0.18), transparent 30%),
+    radial-gradient(circle at 84% 86%, rgba(72, 211, 153, 0.14), transparent 34%),
+    linear-gradient(135deg, #17263b 0%, #213852 52%, #1c4a46 100%);
+}
+
+.app-chrome {
+  align-items: center;
+  padding: 16px 18px;
+}
+
+.app-chrome-actions {
+  justify-content: flex-end;
+  row-gap: 10px;
+}
+
+.app-chrome-actions .btn {
+  min-width: 104px;
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.07);
+  color: #edf6ff;
+}
+
+.app-chrome-actions .btn-primary {
+  min-width: 188px;
+  background: #ffffff;
+  color: #102033;
+  border-color: transparent;
+}
+
+.app-chrome-actions .theme-chip {
+  min-width: 92px;
+  background: rgba(56, 189, 248, 0.14);
+  color: #dff6ff;
+}
+
+.student-home {
+  gap: 18px;
+}
+
+.student-home .page-header {
+  align-items: center;
+  margin-bottom: 6px;
+  padding: 6px 2px 0;
+}
+
+.student-home .page-header-copy {
+  max-width: 680px;
+}
+
+.student-home .page-header h2 {
+  font-size: clamp(2rem, 4vw, 3.2rem);
+}
+
+.student-home .page-subtitle {
+  color: #d1dbea;
+  font-size: 16px;
+}
+
+.student-code-search {
+  width: min(760px, 100%);
+  margin: 0 auto 6px;
+  padding: clamp(22px, 4vw, 34px);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(35, 52, 78, 0.9);
+  box-shadow:
+    0 22px 54px rgba(3, 9, 20, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.student-code-search .field-block {
+  align-items: center;
+  gap: 12px;
+}
+
+.student-code-search .field-label {
+  color: #eef5ff;
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.student-code-search-row {
+  width: min(620px, 100%);
+  margin: 0 auto;
+  gap: 12px;
+}
+
+.student-code-search-row .field-input {
+  min-height: 58px;
+  border-radius: 12px;
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.student-code-search-row .field-input::placeholder {
+  color: #d0dbea;
+  font-weight: 650;
+}
+
+.student-code-search-row .btn {
+  min-width: 120px;
+  min-height: 58px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 850;
+}
+
+.student-code-search-hint {
+  text-align: center;
+  color: #d5dfed;
+}
+
+.system-capabilities {
+  width: min(900px, 100%);
+  margin: 0 auto 4px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.capability-pill {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #eef7ff;
+  text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.capability-pill span {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 999px;
+  background: rgba(52, 211, 153, 0.18);
+  color: #8ff0c8;
+  font-weight: 900;
+}
+
+.capability-pill strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.student-join-card {
+  width: min(560px, 100%);
+  padding: clamp(26px, 4vw, 38px);
+}
+
+.student-join-card .page-subtitle {
+  margin-top: 12px;
+}
+
+.join-form-stack {
+  gap: 14px;
+}
+
+.join-form-actions {
+  justify-content: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.join-form-actions .btn {
+  min-width: 150px;
+}
+
+.teacher-auth-dialog {
+  width: min(560px, calc(100vw - 32px));
+  padding: clamp(24px, 4vw, 34px);
+  direction: rtl;
+  text-align: right;
+  background: rgba(24, 36, 58, 0.86);
+  border-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.teacher-auth-head {
+  text-align: right;
+}
+
+.teacher-auth-head h3 {
+  font-size: 26px;
+}
+
+.teacher-auth-form {
+  gap: 16px;
+}
+
+.auth-form label,
+.auth-form label span {
+  text-align: right;
+}
+
+.auth-input-wrap {
+  width: 100%;
+}
+
+.auth-input-icon {
+  right: 14px;
+  left: auto;
+  color: rgba(255, 255, 255, 0.46);
+}
+
+.auth-password-toggle {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.58);
+  transform: translateY(-50%);
+}
+
+.auth-password-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+.auth-password-toggle:hover:not(:disabled) {
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.auth-password-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.18);
+}
+
+.auth-form input {
+  min-height: 48px;
+  padding: 10px 46px 10px 48px;
+  background: #22324f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font-size: 15px;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.auth-form input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+  opacity: 1;
+}
+
+.auth-form input:focus {
+  background: #22324f;
+  color: #ffffff;
+  border-color: #4f8cff;
+  box-shadow: 0 0 0 3px rgba(79, 140, 255, 0.14);
+}
+
+.auth-separator {
+  margin: 18px 0 14px;
+}
+
+@media (max-width: 900px) {
+  .system-capabilities {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .app-chrome-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .app-chrome-actions .btn,
+  .app-chrome-actions .btn-primary,
+  .app-chrome-actions .theme-chip {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .student-home .page-header {
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .student-home .page-header-actions {
+    justify-content: center;
+  }
+
+  .student-code-search-row {
+    flex-direction: column;
+  }
+
+  .student-code-search-row .btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .system-capabilities {
+    grid-template-columns: 1fr;
+  }
+
+  .capability-pill {
+    min-height: 48px;
+  }
+
+  .app-chrome-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .join-form-actions {
+    flex-direction: column;
+  }
+
+  .join-form-actions .btn {
+    width: 100%;
+  }
 }

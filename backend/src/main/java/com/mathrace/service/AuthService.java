@@ -2,10 +2,16 @@ package com.mathrace.service;
 
 import com.mathrace.dto.auth.TeacherLoginRequest;
 import com.mathrace.dto.auth.TeacherLoginResponse;
+import com.mathrace.dto.auth.TeacherDirectPasswordResetRequest;
+import com.mathrace.dto.auth.TeacherForgotPasswordRequest;
 import com.mathrace.dto.auth.TeacherGoogleLoginRequest;
 import com.mathrace.dto.auth.TeacherRegisterRequest;
+import com.mathrace.dto.auth.TeacherResetPasswordRequest;
+import com.mathrace.dto.auth.TeacherValidateResetTokenResponse;
+import com.mathrace.entity.PasswordResetToken;
 import com.mathrace.entity.Teacher;
 import com.mathrace.exception.ApiException;
+import com.mathrace.repository.PasswordResetTokenRepository;
 import com.mathrace.repository.TeacherRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,8 +23,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.Locale;
+import java.util.Base64;
 import java.util.UUID;
 
 @Service
@@ -26,21 +38,28 @@ import java.util.UUID;
 public class AuthService {
 
     private final TeacherRepository teacherRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final ObjectMapper objectMapper;
+    private final EmailService emailService;
 
     private final RestClient restClient = RestClient.builder().build();
 
     @Value("${app.auth.google-client-id:}")
     private String googleClientId;
 
+    @Value("${app.frontend-base-url:http://localhost:5173}")
+    private String frontendBaseUrl;
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+
     @Transactional
     public Long registerTeacher(TeacherRegisterRequest request) {
         String username = normalizeUsername(request.email());
         teacherRepository.findByEmail(username)
             .ifPresent(t -> {
-                throw new ApiException("USERNAME_EXISTS", "Username already exists");
+                throw new ApiException("EMAIL_EXISTS", "המייל כבר קיים במערכת, נסי להתחבר.");
             });
 
         Teacher teacher = new Teacher();
@@ -55,10 +74,10 @@ public class AuthService {
     public TeacherLoginResponse loginTeacher(TeacherLoginRequest request) {
         String username = normalizeUsername(request.email());
         Teacher teacher = teacherRepository.findByEmail(username)
-            .orElseThrow(() -> new ApiException("INVALID_CREDENTIALS", "Invalid username or password"));
+            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "המשתמש לא נמצא"));
 
         if (!passwordEncoder.matches(request.password(), teacher.getPasswordHash())) {
-            throw new ApiException("INVALID_CREDENTIALS", "Invalid username or password");
+            throw new ApiException("INVALID_PASSWORD", "הסיסמה שגויה");
         }
 
         teacher.setLastLoginAt(LocalDateTime.now());
@@ -68,6 +87,51 @@ public class AuthService {
             token,
             new TeacherLoginResponse.TeacherProfile(teacher.getId(), teacher.getFullName(), teacher.getEmail())
         );
+    }
+
+    @Transactional
+    public void verifyTeacherEmailForPasswordReset(TeacherForgotPasswordRequest request) {
+        String email = normalizeUsername(request.email());
+        Teacher teacher = teacherRepository.findByEmail(email)
+            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "המשתמש לא נמצא"));
+
+        passwordResetTokenRepository.findByTeacherAndUsedAtIsNull(teacher)
+            .forEach(token -> token.setUsedAt(LocalDateTime.now()));
+
+        String rawToken = generateResetToken();
+        PasswordResetToken resetToken = new PasswordResetToken();
+        resetToken.setTeacher(teacher);
+        resetToken.setTokenHash(hashToken(rawToken));
+        resetToken.setExpiresAt(LocalDateTime.now().plusMinutes(30));
+        passwordResetTokenRepository.save(resetToken);
+
+        String resetLink = frontendBaseUrl.replaceAll("/+$", "") + "/reset-password?token=" + rawToken;
+        emailService.sendPasswordResetEmail(teacher.getEmail(), resetLink);
+    }
+
+    @Transactional(readOnly = true)
+    public TeacherValidateResetTokenResponse validateResetToken(String rawToken) {
+        PasswordResetToken resetToken = findValidResetToken(rawToken);
+        return new TeacherValidateResetTokenResponse(true, resetToken.getTeacher().getEmail());
+    }
+
+    @Transactional
+    public void resetTeacherPassword(TeacherResetPasswordRequest request) {
+        PasswordResetToken resetToken = findValidResetToken(request.token());
+        Teacher teacher = resetToken.getTeacher();
+        teacher.setPasswordHash(passwordEncoder.encode(request.password()));
+        resetToken.setUsedAt(LocalDateTime.now());
+        passwordResetTokenRepository.save(resetToken);
+        teacherRepository.save(teacher);
+    }
+
+    @Transactional
+    public void resetTeacherPasswordDirect(TeacherDirectPasswordResetRequest request) {
+        String email = normalizeUsername(request.email());
+        Teacher teacher = teacherRepository.findByEmail(email)
+            .orElseThrow(() -> new ApiException("USER_NOT_FOUND", "המשתמש לא נמצא"));
+        teacher.setPasswordHash(passwordEncoder.encode(request.password()));
+        teacherRepository.save(teacher);
     }
 
     @Transactional
@@ -147,5 +211,36 @@ public class AuthService {
 
     private String normalizeUsername(String username) {
         return username.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private PasswordResetToken findValidResetToken(String rawToken) {
+        if (rawToken == null || rawToken.isBlank()) {
+            throw new ApiException("INVALID_RESET_TOKEN", "קישור איפוס הסיסמה אינו תקין");
+        }
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByTokenHash(hashToken(rawToken))
+            .orElseThrow(() -> new ApiException("INVALID_RESET_TOKEN", "קישור איפוס הסיסמה אינו תקין"));
+        if (resetToken.isUsed()) {
+            throw new ApiException("RESET_TOKEN_USED", "קישור איפוס הסיסמה כבר נוצל");
+        }
+        if (resetToken.isExpired()) {
+            throw new ApiException("RESET_TOKEN_EXPIRED", "קישור איפוס הסיסמה פג תוקף");
+        }
+        return resetToken;
+    }
+
+    private String generateResetToken() {
+        byte[] bytes = new byte[32];
+        SECURE_RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private String hashToken(String rawToken) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(rawToken.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is not available", ex);
+        }
     }
 }

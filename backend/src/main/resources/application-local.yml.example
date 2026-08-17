@@ -5,8 +5,15 @@ spring:
   datasource:
     username: root
     password: your-mysql-password-here
+  mail:
+    username: your-gmail-address@gmail.com
+    # Use a Gmail App Password, not your normal Gmail password.
+    password: your-gmail-app-password
 
 app:
+  frontend-base-url: http://localhost:5173
   auth:
     # Must match frontend VITE_GOOGLE_CLIENT_ID (Google Cloud OAuth Web client)
     google-client-id: your-google-oauth-client-id.apps.googleusercontent.com
+  mail:
+    from: your-gmail-address@gmail.com

@@ -70,9 +70,11 @@ export function StudentDashboard({
         title="מרוץ חשבון"
         subtitle="בחרו מרוץ והצטרפו עם שם למשחק — בלי הרשמה"
         actions={
-          <Button onClick={onJoinGeneral}>
-            הצטרפות כללית
-          </Button>
+          showEmptyState ? null : (
+            <Button onClick={onJoinGeneral}>
+              הצטרפות כללית
+            </Button>
+          )
         }
       />
 
@@ -107,6 +109,20 @@ export function StudentDashboard({
         ) : null}
       </Card>
 
+      <div className="system-capabilities" aria-label="System capabilities">
+        {[
+          "מחולל שאלות דינמי",
+          "רמות קושי משתנות",
+          "מעקב התקדמות",
+          "דשבורד למורה"
+        ].map((capability) => (
+          <div className="capability-pill" key={capability}>
+            <span aria-hidden="true">✓</span>
+            <strong>{capability}</strong>
+          </div>
+        ))}
+      </div>
+
       {activeRoomCode ? (
         <Card className="student-current-race">
           <div>
@@ -137,11 +153,9 @@ export function StudentDashboard({
           </Button>
         </div>
 
-        {filteredRaces.length === 0 && !loading ? (
+        {filteredRaces.length === 0 && !loading && hasSearch ? (
           <p className="muted">
-            {hasSearch
-              ? "אין מרוצים פתוחים שתואמים לחיפוש."
-              : "אין כרגע מרוצים פתוחים. חפשו לפי שם או קוד, או השתמשו בהצטרפות כללית."}
+            אין מרוצים פתוחים שתואמים לחיפוש.
           </p>
         ) : null}
 
@@ -164,11 +178,12 @@ export function StudentDashboard({
 
       {showEmptyState ? (
         <EmptyState
-          title="אין מרוצים פתוחים כרגע"
-          description="חפשו לפי שם מרוץ או קוד חדר, או השתמשו בהצטרפות כללית."
+          title="אין מרוצים פתוחים"
+          description="ניתן להצטרף באמצעות קוד חדר או ליצור מרוץ חדש."
           action={<Button onClick={onJoinGeneral}>הצטרפות כללית</Button>}
         />
       ) : null}
+
     </section>
   );
 }

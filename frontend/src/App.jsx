@@ -189,7 +189,6 @@ function App() {
 
   const handleTeacherRegister = async (fullName, email, password) => {
     await api.teacherRegister(fullName, email, password);
-    await handleTeacherLogin(email, password);
   };
 
   const handleTeacherGoogleLogin = async (idToken) => {
@@ -635,6 +634,7 @@ function App() {
         onTeacherLogin={handleTeacherLogin}
         onTeacherRegister={handleTeacherRegister}
         onGoogleLogin={handleTeacherGoogleLogin}
+        onResetPasswordDirect={(email, password) => api.teacherResetPasswordDirect(email, password)}
       />
       <ConfirmDialog
         open={logoutConfirmOpen}
