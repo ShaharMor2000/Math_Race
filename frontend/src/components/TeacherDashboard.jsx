@@ -26,6 +26,15 @@ function matchesRoomFilter(room, filter) {
   return true;
 }
 
+function formatRoomParticipantsMeta(room) {
+  const participants = room.participants || 0;
+  if (room.status === "FINISHED") {
+    return `השתתפו: ${participants}`;
+  }
+  const approved = Number(room.approvedParticipants || 0);
+  return `משתתפים: ${participants}${room.status !== "RUNNING" && approved > 0 ? ` · מאושרים: ${approved}` : ""}`;
+}
+
 export function TeacherDashboard({
   rooms,
   lastCreatedRoomCode,
@@ -131,8 +140,7 @@ export function TeacherDashboard({
               <strong>{room.title}</strong>
               <span className="room-card-code">קוד: {room.roomCode}</span>
               <span className="room-card-meta">
-                משתתפים: {room.participants || 0}
-                {Number(room.approvedParticipants || 0) > 0 ? ` · מאושרים: ${room.approvedParticipants}` : ""}
+                {formatRoomParticipantsMeta(room)}
               </span>
               <div className="room-card-actions">
                 <Button
