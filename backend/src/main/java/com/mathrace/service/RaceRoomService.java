@@ -80,12 +80,16 @@ public class RaceRoomService {
             .map(room -> {
                 long pending = raceParticipantRepository.countByRaceRoomAndParticipantStatus(room, ParticipantStatus.PENDING);
                 long approved = raceParticipantRepository.countByRaceRoomAndParticipantStatus(room, ParticipantStatus.ACTIVE);
+                long finished = raceParticipantRepository.countByRaceRoomAndParticipantStatus(room, ParticipantStatus.FINISHED);
+                boolean ended = room.getStatus() == RaceRoomStatus.FINISHED
+                    || room.getStatus() == RaceRoomStatus.CANCELLED;
+                long participants = ended ? finished + approved : pending + approved;
                 return new RoomSummaryResponse(
                     room.getId(),
                     room.getRoomCode(),
                     room.getTitle(),
                     room.getStatus(),
-                    pending + approved,
+                    participants,
                     pending,
                     approved,
                     room.getCreatedAt()
