@@ -34,6 +34,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -122,17 +123,32 @@ public class GameEngineService {
 
     @Transactional
     public QuestionResponse nextQuestion(String roomCode, Long participantId) {
+        return nextQuestion(roomCode, participantId, false);
+    }
+
+    @Transactional
+    public QuestionResponse nextQuestion(String roomCode, Long participantId, boolean advance) {
         RaceRoom room = raceRoomService.getByRoomCodeOrThrow(roomCode);
         RaceParticipant participant = getParticipantOrThrow(participantId);
         validateParticipantInRoom(participant, room);
         ensureRacePlayable(room);
 
         RuntimeParticipantState state = sessionState(room.getId(), participant);
+        if (advance) {
+            expireOpenQuestions(participant);
+        } else {
+            GeneratedQuestion openQuestion = currentOpenQuestion(participant);
+            if (openQuestion != null) {
+                return toQuestionResponse(openQuestion, state);
+            }
+        }
+
         if (state.getFrozenQuestionsRemaining() > 0) {
             state.setFrozenQuestionsRemaining(state.getFrozenQuestionsRemaining() - 1);
             persistState(participant, state);
             throw new ApiException("VEHICLE_FROZEN", "הרכב נעצר לשאלה אחת אחרי כישלון באוטוסטרדה");
         }
+
         DifficultyLevel difficulty = resolveDifficulty(room, participant, state);
         boolean hintActive = state.getHintQuestionsRemaining() > 0;
         boolean reducedOptions = hintActive;
@@ -397,6 +413,7 @@ public class GameEngineService {
         if (!state.isPendingPathDecision()) {
             throw new ApiException("NO_PENDING_PATH_DECISION", "אין בחירת מסלול ממתינה");
         }
+        expireOpenQuestions(participant);
         state.setPendingPathDecision(false);
         state.setDecisionMeter(0);
         applyPathChoice(state, request.choice());
@@ -597,6 +614,82 @@ public class GameEngineService {
 
     private boolean isPathChallengeActive(RuntimeParticipantState state) {
         return isHighwayChallenge(state) || isDirtRoadChallenge(state);
+    }
+
+    private GeneratedQuestion currentOpenQuestion(RaceParticipant participant) {
+        List<GeneratedQuestion> openQuestions = generatedQuestionRepository
+            .findByRaceParticipantAndIsAnsweredFalse(participant);
+        if (openQuestions.isEmpty()) {
+            return null;
+        }
+
+        openQuestions.sort(Comparator.comparing(GeneratedQuestion::getPresentedAt).reversed());
+        GeneratedQuestion newest = openQuestions.get(0);
+        List<GeneratedQuestion> extras = openQuestions.subList(1, openQuestions.size());
+        LocalDateTime now = LocalDateTime.now();
+        for (GeneratedQuestion extra : extras) {
+            extra.setAnswered(true);
+            extra.setExpiredAt(now);
+        }
+        if (!extras.isEmpty()) {
+            generatedQuestionRepository.saveAll(extras);
+        }
+
+        if (newest.getExpiredAt() != null || isQuestionTimedOut(newest)) {
+            newest.setAnswered(true);
+            if (newest.getExpiredAt() == null) {
+                newest.setExpiredAt(now);
+            }
+            generatedQuestionRepository.save(newest);
+            return null;
+        }
+        return newest;
+    }
+
+    private void expireOpenQuestions(RaceParticipant participant) {
+        LocalDateTime now = LocalDateTime.now();
+        List<GeneratedQuestion> openQuestions = generatedQuestionRepository
+            .findByRaceParticipantAndIsAnsweredFalse(participant);
+        for (GeneratedQuestion question : openQuestions) {
+            question.setAnswered(true);
+            if (question.getExpiredAt() == null) {
+                question.setExpiredAt(now);
+            }
+        }
+        if (!openQuestions.isEmpty()) {
+            generatedQuestionRepository.saveAll(openQuestions);
+        }
+    }
+
+    private boolean isQuestionTimedOut(GeneratedQuestion question) {
+        return question.getPresentedAt()
+            .plus(Duration.ofMillis(Math.max(0, question.getMaxTimeMs())))
+            .isBefore(LocalDateTime.now());
+    }
+
+    private QuestionResponse toQuestionResponse(GeneratedQuestion question, RuntimeParticipantState state) {
+        boolean hintActive = state.getHintQuestionsRemaining() > 0;
+        return new QuestionResponse(
+            question.getId(),
+            question.getDifficulty(),
+            question.getQuestionText(),
+            parseOptions(question.getOptionsJson()),
+            question.getMaxTimeMs(),
+            question.getPresentedAt(),
+            hintActive,
+            hintActive,
+            state.isQuestionSwapAvailable()
+        );
+    }
+
+    private List<String> parseOptions(String optionsJson) {
+        if (optionsJson == null || optionsJson.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(optionsJson.split(","))
+            .map(String::trim)
+            .filter(option -> !option.isEmpty())
+            .toList();
     }
 
     private void consumePathProgress(RuntimeParticipantState state) {

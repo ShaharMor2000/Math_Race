@@ -66,10 +66,14 @@ public class StudentRaceController {
     }
 
     @GetMapping("/races/{roomCode}/question")
-    public QuestionResponse nextQuestion(HttpServletRequest request, @PathVariable String roomCode) {
+    public QuestionResponse nextQuestion(
+        HttpServletRequest request,
+        @PathVariable String roomCode,
+        @RequestParam(defaultValue = "false") boolean advance
+    ) {
         AuthPrincipal principal = AuthSupport.requireStudent(request);
         ensureStudentInRoom(principal, roomCode);
-        return gameEngineService.nextQuestion(roomCode, principal.participantId());
+        return gameEngineService.nextQuestion(roomCode, principal.participantId(), advance);
     }
 
     @PostMapping("/races/{roomCode}/answer")

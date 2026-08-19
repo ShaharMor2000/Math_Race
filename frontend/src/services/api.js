@@ -303,8 +303,8 @@ export const api = {
       useTeacherAuth: false
     }),
 
-  nextQuestion: (roomCode) =>
-    request(`/student/races/${roomCode}/question`, {
+  nextQuestion: (roomCode, advance = false) =>
+    request(`/student/races/${roomCode}/question${advance ? "?advance=true" : ""}`, {
       useStudentAuth: true,
       useTeacherAuth: false
     }),

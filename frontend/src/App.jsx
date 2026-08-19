@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { CreateRace } from "./components/CreateRace";
 import { FinalResults } from "./components/FinalResults";
@@ -63,6 +63,11 @@ function App() {
   const [removingRoomCode, setRemovingRoomCode] = useState(null);
   const [teacherAuthOpen, setTeacherAuthOpen] = useState(false);
   const [studentAlert, setStudentAlert] = useState(null);
+  const fetchNextQuestionInFlightRef = useRef(null);
+  const pendingPathDecisionRef = useRef(false);
+  const questionBusyRef = useRef(false);
+  const questionRequestIdRef = useRef(0);
+  const currentQuestionIdRef = useRef(null);
 
   const showToast = useCallback((message, type = "error") => {
     if (!message) return;
@@ -173,23 +178,51 @@ function App() {
     setTeacherEventMessage(message);
   }, []);
 
-  const fetchNextQuestion = useCallback(async (roomCode, attempt = 0) => {
-    try {
-      const q = await api.nextQuestion(roomCode);
-      setStudentQuestion(q);
-    } catch (error) {
-      const message = String(error?.message || "");
-      const code = String(error?.code || "");
-      if ((code === "ROOM_NOT_RUNNING" || message.includes("ROOM_NOT_RUNNING")) && attempt < 5) {
-        window.setTimeout(() => void fetchNextQuestion(roomCode, attempt + 1), 300 * (attempt + 1));
-        return;
-      }
-      if (message.includes("VEHICLE_FROZEN") && attempt < 4) {
-        setStudentEventMessage("הרכב נעצר לרגע אחרי כישלון באוטוסטרדה...");
-        window.setTimeout(() => void fetchNextQuestion(roomCode, attempt + 1), 3000);
-        return;
-      }
+  const fetchNextQuestion = useCallback(async (roomCode, options = {}) => {
+    const advance = Boolean(options.advance);
+    const attempt = Number(options.attempt || 0);
+    if (!roomCode || pendingPathDecisionRef.current) return;
+    if (!advance && questionBusyRef.current) return;
+    if (!advance && fetchNextQuestionInFlightRef.current && attempt === 0) {
+      return fetchNextQuestionInFlightRef.current;
     }
+
+    const requestId = ++questionRequestIdRef.current;
+    const request = (async () => {
+      try {
+        const q = await api.nextQuestion(roomCode, advance);
+        if (requestId !== questionRequestIdRef.current || pendingPathDecisionRef.current) {
+          return;
+        }
+        setStudentQuestion((prev) => {
+          if (prev?.questionId === q.questionId) {
+            return prev;
+          }
+          currentQuestionIdRef.current = q.questionId;
+          return q;
+        });
+      } catch (error) {
+        const message = String(error?.message || "");
+        const code = String(error?.code || "");
+        if ((code === "ROOM_NOT_RUNNING" || message.includes("ROOM_NOT_RUNNING")) && attempt < 5) {
+          window.setTimeout(() => void fetchNextQuestion(roomCode, { advance, attempt: attempt + 1 }), 300 * (attempt + 1));
+          return;
+        }
+        if (message.includes("VEHICLE_FROZEN") && attempt < 4) {
+          setStudentEventMessage("הרכב נעצר לרגע אחרי כישלון באוטוסטרדה...");
+          window.setTimeout(() => void fetchNextQuestion(roomCode, { advance, attempt: attempt + 1 }), 3000);
+        }
+      } finally {
+        if (!advance && attempt === 0 && fetchNextQuestionInFlightRef.current) {
+          fetchNextQuestionInFlightRef.current = null;
+        }
+      }
+    })();
+
+    if (!advance && attempt === 0) {
+      fetchNextQuestionInFlightRef.current = request;
+    }
+    return request;
   }, []);
 
   const applyStudentRoomState = useCallback((state) => {
@@ -221,7 +254,7 @@ function App() {
       if (status === "RUNNING") {
         setStudentRacePaused(false);
         setStudentView("race");
-        if (!studentQuestion) {
+        if (!studentQuestion && !pendingPathDecisionRef.current && !questionBusyRef.current) {
           void fetchNextQuestion(studentRoomCode);
         }
       } else if (status === "PAUSED") {
@@ -248,7 +281,7 @@ function App() {
     if (studentRoomStatus === "RUNNING" || studentRoomStatus === "PAUSED") {
       setStudentView("race");
       setStudentRacePaused(studentRoomStatus === "PAUSED");
-      if (studentRoomStatus === "RUNNING" && !studentQuestion) {
+      if (studentRoomStatus === "RUNNING" && !studentQuestion && !pendingPathDecisionRef.current && !questionBusyRef.current) {
         void fetchNextQuestion(studentRoomCode);
       }
     }
@@ -257,7 +290,7 @@ function App() {
   useEffect(() => {
     if (!studentRoomCode || !studentParticipantId || studentParticipantStatus !== "ACTIVE") return;
     if (studentRoomStatus !== "RUNNING") return;
-    if (studentQuestion || studentFinalRows) return;
+    if (studentQuestion || studentFinalRows || pendingPathDecisionRef.current || questionBusyRef.current) return;
     void fetchNextQuestion(studentRoomCode);
   }, [studentRoomCode, studentParticipantId, studentParticipantStatus, studentRoomStatus, studentQuestion, studentFinalRows, fetchNextQuestion]);
 
@@ -617,9 +650,12 @@ function App() {
 
   const answerQuestion = async (answer, responseTimeMs) => {
     if (!studentRoomCode || !studentParticipantId || !studentQuestion || studentRacePaused || pendingPathDecision) return;
+    if (questionBusyRef.current) return;
+    questionBusyRef.current = true;
+    const answeredQuestionId = studentQuestion.questionId;
     try {
       const res = await api.submitAnswer(studentRoomCode, {
-        questionId: studentQuestion.questionId,
+        questionId: answeredQuestionId,
         submittedAnswer: answer,
         responseTimeMs
       });
@@ -630,17 +666,21 @@ function App() {
       window.setTimeout(() => setAnswerFeedback(null), 500);
 
       if (Number(res.newProgress) >= 1000) {
-        setStudentQuestion(null);
+        pendingPathDecisionRef.current = false;
         setPendingPathDecision(false);
+        setStudentQuestion(null);
         await showFinalResultsForRoom(studentRoomCode);
         return;
       }
 
       const hasPathDecision = res.triggeredEvent?.type === "PATH_DECISION";
+      pendingPathDecisionRef.current = hasPathDecision;
       setPendingPathDecision(hasPathDecision);
-      if (!hasPathDecision) {
-        await fetchNextQuestion(studentRoomCode);
+      if (hasPathDecision) {
+        setStudentQuestion(null);
+        return;
       }
+      await fetchNextQuestion(studentRoomCode, { advance: true });
     } catch (error) {
       const message = String(error?.message || "");
       const raceEnded =
@@ -649,10 +689,11 @@ function App() {
         message.includes("RACE_TIMEOUT") ||
         message.includes("זמן המרוץ הסתיים");
 
-      setStudentQuestion(null);
+      pendingPathDecisionRef.current = false;
       setPendingPathDecision(false);
 
       if (raceEnded && studentRoomCode) {
+        setStudentQuestion(null);
         await showFinalResultsForRoom(studentRoomCode);
         return;
       }
@@ -664,10 +705,13 @@ function App() {
         message.includes("שגיאת מערכת");
 
       if (shouldContinue && studentRoomCode) {
-        await fetchNextQuestion(studentRoomCode);
+        await fetchNextQuestion(studentRoomCode, { advance: true });
         return;
       }
       showToast(error.message || "שליחת התשובה נכשלה");
+      throw error;
+    } finally {
+      questionBusyRef.current = false;
     }
   };
 
@@ -684,26 +728,41 @@ function App() {
 
   const choosePath = async (choice) => {
     if (!studentRoomCode || !studentParticipantId || !pendingPathDecision) return;
+    questionBusyRef.current = true;
+    pendingPathDecisionRef.current = false;
     setPendingPathDecision(false);
+    setStudentQuestion(null);
     try {
       await api.choosePath(studentRoomCode, choice);
+      await fetchNextQuestion(studentRoomCode, { advance: true });
     } catch (error) {
       showToast(error.message || "בחירת המסלול נכשלה");
+    } finally {
+      questionBusyRef.current = false;
     }
   };
 
   const finishPathDecisionByTimeout = useCallback(async () => {
     if (!studentRoomCode || !studentParticipantId) {
+      pendingPathDecisionRef.current = false;
       setPendingPathDecision(false);
       return;
     }
+    questionBusyRef.current = true;
+    pendingPathDecisionRef.current = false;
     setPendingPathDecision(false);
+    setStudentQuestion(null);
     try {
       await api.choosePath(studentRoomCode, "NORMAL");
     } catch {
-      // If the backend no longer has a pending decision, the UI can still resume the current question.
+      // If the backend no longer has a pending decision, continue to the next question.
     }
-  }, [studentParticipantId, studentRoomCode]);
+    try {
+      await fetchNextQuestion(studentRoomCode, { advance: true });
+    } finally {
+      questionBusyRef.current = false;
+    }
+  }, [fetchNextQuestion, studentParticipantId, studentRoomCode]);
 
   const logoutTeacher = () => {
     session.clearTeacher();
@@ -753,6 +812,9 @@ function App() {
     setStudentQuestion(null);
     setStudentProgress(0);
     setStudentScore(0);
+    pendingPathDecisionRef.current = false;
+    questionBusyRef.current = false;
+    currentQuestionIdRef.current = null;
     setPendingPathDecision(false);
     setStudentEventMessage(null);
     setStudentFinalRows(null);
@@ -944,7 +1006,7 @@ function App() {
       if (role === "student") {
         setStudentRoomStatus("RUNNING");
         setStudentRacePaused(false);
-        if (studentRoomCode && studentParticipantId && studentParticipantStatus === "ACTIVE") {
+        if (studentRoomCode && studentParticipantId && studentParticipantStatus === "ACTIVE" && !pendingPathDecisionRef.current && !questionBusyRef.current) {
           void fetchNextQuestion(studentRoomCode);
         }
       }

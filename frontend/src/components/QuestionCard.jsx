@@ -12,6 +12,7 @@ export function QuestionCard({ question, onAnswer, onSwap, feedback, paused = fa
     setRemainingMs(question.maxTimeMs);
     activeElapsedMsRef.current = 0;
     timedOutRef.current = false;
+    setSubmitting(false);
   }, [question.questionId, question.maxTimeMs]);
 
   useEffect(() => {
@@ -31,12 +32,12 @@ export function QuestionCard({ question, onAnswer, onSwap, feedback, paused = fa
   }, [remainingMs, submitting, paused]);
 
   const submit = async (answer, responseTimeOverrideMs = null) => {
-    if (submitting) return;
+    if (submitting || paused) return;
     setSubmitting(true);
     const responseTimeMs = responseTimeOverrideMs ?? Math.min(question.maxTimeMs, activeElapsedMsRef.current);
     try {
       await onAnswer(answer, responseTimeMs);
-    } finally {
+    } catch {
       setSubmitting(false);
     }
   };
