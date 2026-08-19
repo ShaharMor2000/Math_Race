@@ -134,6 +134,7 @@ public class GameEngineService {
         ensureRacePlayable(room);
 
         RuntimeParticipantState state = sessionState(room.getId(), participant);
+        expireTimedOutQuestions(participant);
         if (advance) {
             expireOpenQuestions(participant);
         } else {
@@ -146,7 +147,6 @@ public class GameEngineService {
         if (state.getFrozenQuestionsRemaining() > 0) {
             state.setFrozenQuestionsRemaining(state.getFrozenQuestionsRemaining() - 1);
             persistState(participant, state);
-            throw new ApiException("VEHICLE_FROZEN", "הרכב נעצר לשאלה אחת אחרי כישלון באוטוסטרדה");
         }
 
         DifficultyLevel difficulty = resolveDifficulty(room, participant, state);
@@ -204,6 +204,7 @@ public class GameEngineService {
             throw new ApiException("SWAP_NOT_AVAILABLE", "החלפת שאלה אינה זמינה");
         }
 
+        current.setAnswered(true);
         current.setExpiredAt(LocalDateTime.now());
         generatedQuestionRepository.save(current);
         state.setQuestionSwapAvailable(false);
@@ -309,6 +310,11 @@ public class GameEngineService {
                 delta = -HIGHWAY_FAILURE_PENALTY;
                 state.setFrozenQuestionsRemaining(1);
                 publishStalledEvent(room, participant);
+                eventData = new SubmitAnswerResponse.EventData(
+                    "STALLED",
+                    -HIGHWAY_FAILURE_PENALTY,
+                    "סטול! הרכב נעצר אחרי כישלון באוטוסטרדה"
+                );
             }
         }
 
@@ -646,6 +652,24 @@ public class GameEngineService {
         return newest;
     }
 
+    private void expireTimedOutQuestions(RaceParticipant participant) {
+        LocalDateTime now = LocalDateTime.now();
+        List<GeneratedQuestion> expired = generatedQuestionRepository
+            .findByRaceParticipantAndIsAnsweredFalse(participant)
+            .stream()
+            .filter(question -> question.getExpiredAt() != null || isQuestionTimedOut(question))
+            .toList();
+        for (GeneratedQuestion question : expired) {
+            question.setAnswered(true);
+            if (question.getExpiredAt() == null) {
+                question.setExpiredAt(now);
+            }
+        }
+        if (!expired.isEmpty()) {
+            generatedQuestionRepository.saveAll(expired);
+        }
+    }
+
     private void expireOpenQuestions(RaceParticipant participant) {
         LocalDateTime now = LocalDateTime.now();
         List<GeneratedQuestion> openQuestions = generatedQuestionRepository
@@ -662,9 +686,9 @@ public class GameEngineService {
     }
 
     private boolean isQuestionTimedOut(GeneratedQuestion question) {
-        return question.getPresentedAt()
+        return !question.getPresentedAt()
             .plus(Duration.ofMillis(Math.max(0, question.getMaxTimeMs())))
-            .isBefore(LocalDateTime.now());
+            .isAfter(LocalDateTime.now());
     }
 
     private QuestionResponse toQuestionResponse(GeneratedQuestion question, RuntimeParticipantState state) {

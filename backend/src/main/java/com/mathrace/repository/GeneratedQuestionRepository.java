@@ -11,4 +11,6 @@ public interface GeneratedQuestionRepository extends JpaRepository<GeneratedQues
     Optional<GeneratedQuestion> findFirstByRaceParticipantAndIsAnsweredFalseOrderByPresentedAtDesc(RaceParticipant participant);
 
     List<GeneratedQuestion> findByRaceParticipantAndIsAnsweredFalse(RaceParticipant participant);
+
+    List<GeneratedQuestion> findTop12ByRaceParticipantOrderByPresentedAtDesc(RaceParticipant participant);
 }

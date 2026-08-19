@@ -68,6 +68,7 @@ function App() {
   const questionBusyRef = useRef(false);
   const questionRequestIdRef = useRef(0);
   const currentQuestionIdRef = useRef(null);
+  const handledQuestionIdsRef = useRef(new Set());
 
   const showToast = useCallback((message, type = "error") => {
     if (!message) return;
@@ -194,6 +195,12 @@ function App() {
         if (requestId !== questionRequestIdRef.current || pendingPathDecisionRef.current) {
           return;
         }
+        if (handledQuestionIdsRef.current.has(q.questionId)) {
+          if (attempt < 4) {
+            await fetchNextQuestion(roomCode, { advance: true, attempt: attempt + 1 });
+          }
+          return;
+        }
         setStudentQuestion((prev) => {
           if (prev?.questionId === q.questionId) {
             return prev;
@@ -208,9 +215,14 @@ function App() {
           window.setTimeout(() => void fetchNextQuestion(roomCode, { advance, attempt: attempt + 1 }), 300 * (attempt + 1));
           return;
         }
-        if (message.includes("VEHICLE_FROZEN") && attempt < 4) {
+        const isVehicleFrozen =
+          code === "VEHICLE_FROZEN" ||
+          message.includes("VEHICLE_FROZEN") ||
+          message.includes("הרכב נעצר");
+        if (isVehicleFrozen && attempt < 4) {
+          setStudentQuestion(null);
           setStudentEventMessage("הרכב נעצר לרגע אחרי כישלון באוטוסטרדה...");
-          window.setTimeout(() => void fetchNextQuestion(roomCode, { advance, attempt: attempt + 1 }), 3000);
+          window.setTimeout(() => void fetchNextQuestion(roomCode, { advance, attempt: attempt + 1 }), 1500);
         }
       } finally {
         if (!advance && attempt === 0 && fetchNextQuestionInFlightRef.current) {
@@ -653,6 +665,7 @@ function App() {
     if (questionBusyRef.current) return;
     questionBusyRef.current = true;
     const answeredQuestionId = studentQuestion.questionId;
+    handledQuestionIdsRef.current.add(answeredQuestionId);
     try {
       const res = await api.submitAnswer(studentRoomCode, {
         questionId: answeredQuestionId,
@@ -680,6 +693,10 @@ function App() {
         setStudentQuestion(null);
         return;
       }
+      setStudentQuestion(null);
+      if (res.triggeredEvent?.type === "STALLED") {
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+      }
       await fetchNextQuestion(studentRoomCode, { advance: true });
     } catch (error) {
       const message = String(error?.message || "");
@@ -705,6 +722,7 @@ function App() {
         message.includes("שגיאת מערכת");
 
       if (shouldContinue && studentRoomCode) {
+        setStudentQuestion(null);
         await fetchNextQuestion(studentRoomCode, { advance: true });
         return;
       }

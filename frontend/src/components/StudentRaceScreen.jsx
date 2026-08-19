@@ -142,6 +142,7 @@ export function StudentRaceScreen({
       {!isWaitingForStart && !racePaused && question ? (
         <div style={{ display: decisionEventActive ? "none" : "block" }} aria-hidden={decisionEventActive}>
           <QuestionCard
+            key={question.questionId}
             question={question}
             onAnswer={onAnswer}
             onSwap={onSwapQuestion}

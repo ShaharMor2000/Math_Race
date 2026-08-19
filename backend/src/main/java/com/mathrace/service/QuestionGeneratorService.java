@@ -17,6 +17,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -36,19 +38,29 @@ public class QuestionGeneratorService {
         boolean reducedOptions
     ) {
         QuestionTemplate template = pickTemplate(difficulty);
-        TemplateExpressionEvaluator.GeneratedQuestionData generatedData;
-        if (template != null) {
-            generatedData = expressionEvaluator.generate(
-                new TemplateExpressionEvaluator.QuestionTemplateView(
-                    template.getExpressionPattern(),
-                    template.getMinOperand(),
-                    template.getMaxOperand(),
-                    template.isAllowNegative()
-                ),
-                random
-            );
-        } else {
-            generatedData = fallbackQuestion(difficulty);
+        Set<String> recentTexts = generatedQuestionRepository
+            .findTop12ByRaceParticipantOrderByPresentedAtDesc(participant)
+            .stream()
+            .map(GeneratedQuestion::getQuestionText)
+            .collect(Collectors.toSet());
+
+        TemplateExpressionEvaluator.GeneratedQuestionData generatedData = null;
+        for (int attempt = 0; attempt < 12; attempt++) {
+            TemplateExpressionEvaluator.GeneratedQuestionData candidate = template != null
+                ? expressionEvaluator.generate(
+                    new TemplateExpressionEvaluator.QuestionTemplateView(
+                        template.getExpressionPattern(),
+                        template.getMinOperand(),
+                        template.getMaxOperand(),
+                        template.isAllowNegative()
+                    ),
+                    random
+                )
+                : fallbackQuestion(difficulty);
+            generatedData = candidate;
+            if (!recentTexts.contains(candidate.questionText())) {
+                break;
+            }
         }
 
         int answer = generatedData.answer();
